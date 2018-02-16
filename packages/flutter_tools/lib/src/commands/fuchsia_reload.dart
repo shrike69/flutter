@@ -88,12 +88,7 @@ class FuchsiaReloadCommand extends FlutterCommand {
   Future<Null> runCommand() async {
     Cache.releaseLockEarly();
 
-//    _validateArguments();
-    _address = '192.168.42.41';
-    _fuchsiaRoot = '/Users/shrike/topaz';
-    _buildType = 'debug-x86-64';
-    _list = true;
-    _binaryName = 'spinning_cube';
+    _validateArguments();
 
     // Find the network ports used on the device by VM service instances.
     final List<int> deviceServicePorts = await _getServicePorts();
@@ -107,12 +102,6 @@ class FuchsiaReloadCommand extends FlutterCommand {
         deviceServicePorts);
     // Wrap everything in try/finally to make sure we kill the ssh processes
     // doing the port forwarding.
-
-    for (_PortForwarder pf in forwardedPorts) {
-      final int localPort = pf.port;
-      final int remotePort = pf.remotePort;
-      print('port $localPort forwarded to $remotePort');
-    }
     try {
       final List<int> servicePorts = forwardedPorts.map(
           (_PortForwarder pf) => pf.port).toList();
@@ -122,23 +111,20 @@ class FuchsiaReloadCommand extends FlutterCommand {
         // Port forwarding stops when the command ends. Keep the program running
         // until directed by the user so that Observatory URLs that we print
         // continue to work.
-//        printStatus('Press Enter to exit.');
-//        await stdin.first;
-//        return;
+        printStatus('Press Enter to exit.');
+        await stdin.first;
+        return;
       }
 
       // Check that there are running VM services on the returned
       // ports, and find the Isolates that are running the target app.
-//      final String isolateName = '$_binaryName\$main$_isolateNumber';
-      String isolateName = '';
+      final String isolateName = '$_binaryName\$main$_isolateNumber';
       final List<int> targetPorts = await _filterPorts(
-          servicePorts, _binaryName);
+          servicePorts, isolateName);
       if (targetPorts.isEmpty)
         throwToolExit('No VMs found running $_binaryName.');
-      for (int port in targetPorts) {
+      for (int port in targetPorts)
         printTrace('Found $_binaryName at $port');
-        isolateName = await _isloateNameAtPort(_binaryName, port);
-      }
 
       // Set up a device and hot runner and attach the hot runner to the first
       // vm service we found.
@@ -195,10 +181,8 @@ class FuchsiaReloadCommand extends FlutterCommand {
   Future<List<FlutterView>> _getViews(List<int> ports) async {
     final List<FlutterView> views = <FlutterView>[];
     for (int port in ports) {
-      if (!await _checkPort(port)) {
-        print('port not active');
+      if (!await _checkPort(port))
         continue;
-      }
       final VMService vmService = await _getVMService(port);
       await vmService.getVM();
       await vmService.waitForViews();
@@ -209,7 +193,7 @@ class FuchsiaReloadCommand extends FlutterCommand {
 
   // Find ports where there is a view isolate with the given name
   Future<List<int>> _filterPorts(List<int> ports, String viewFilter) async {
-    printTrace('Looking for view $viewFilter');
+    printTrace('Looing for view $viewFilter');
     final List<int> result = <int>[];
     for (FlutterView v in await _getViews(ports)) {
       final Uri addr = v.owner.vmService.httpAddress;
@@ -218,18 +202,6 @@ class FuchsiaReloadCommand extends FlutterCommand {
         result.add(addr.port);
     }
     return result;
-  }
-
-  Future<String> _isloateNameAtPort(String viewFilter, int port) async {
-    printTrace('Getting view $viewFilter full name');
-    final List<int> ports = [ port ];
-    for (FlutterView v in await _getViews(ports)) {
-      final Uri addr = v.owner.vmService.httpAddress;
-      printTrace('At $addr, found view: ${v.uiIsolate.name}');
-      if (v.uiIsolate.name.contains(viewFilter))
-        return v.uiIsolate.name;
-    }
-    return '';
   }
 
   static const String _bold = '\u001B[0;1m';
@@ -314,7 +286,7 @@ class FuchsiaReloadCommand extends FlutterCommand {
       final VMService vmService = await _getVMService(port);
       await vmService.getVM();
       await vmService.waitForViews();
-//      printStatus(_vmServiceToString(vmService));
+      printStatus(_vmServiceToString(vmService));
     }
   }
 
@@ -445,7 +417,6 @@ class _PortForwarder {
                    this._sshConfig);
 
   int get port => _localPort;
-  int get remotePort => _remotePort;
 
   static Future<_PortForwarder> start(String sshConfig,
                                       String address,

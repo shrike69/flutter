@@ -254,19 +254,6 @@ class PrebuiltIOSApp extends IOSApp {
   String get _bundlePath => bundleDir.path;
 }
 
-class FuchsiaApp extends ApplicationPackage {
-  FuchsiaApp({this.name, this.packagePath, @required String id}) : super(id : id);
-
-  final String name;
-
-  String get displayName => name;
-
-  final String packagePath;
-
-  @override
-  String toString() => displayName;
-}
-
 Future<ApplicationPackage> getApplicationPackageForPlatform(TargetPlatform platform, {
   String applicationBinary
 }) async {
@@ -282,12 +269,10 @@ Future<ApplicationPackage> getApplicationPackageForPlatform(TargetPlatform platf
       return applicationBinary == null
           ? new IOSApp.fromCurrentDirectory()
           : new IOSApp.fromIpa(applicationBinary);
-    case TargetPlatform.fuchsia:
-      print('starting new fuchsia app');
-      return new FuchsiaApp(name : 'hello_material', packagePath: '/Users/shrike/topaz/topaz/examples/hello_material', id : 'fuchsia app');
     case TargetPlatform.darwin_x64:
     case TargetPlatform.linux_x64:
     case TargetPlatform.windows_x64:
+    case TargetPlatform.fuchsia:
       return null;
   }
   assert(platform != null);
