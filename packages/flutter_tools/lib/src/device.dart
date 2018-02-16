@@ -13,6 +13,7 @@ import 'base/file_system.dart';
 import 'base/port_scanner.dart';
 import 'base/utils.dart';
 import 'build_info.dart';
+import 'fuchsia/fuchsia_device.dart';
 import 'globals.dart';
 import 'ios/devices.dart';
 import 'ios/simulators.dart';
@@ -28,6 +29,7 @@ class DeviceManager {
     _deviceDiscoverers.add(new AndroidDevices());
     _deviceDiscoverers.add(new IOSDevices());
     _deviceDiscoverers.add(new IOSSimulators());
+    _deviceDiscoverers.add(new FuchsiaDevices());
   }
 
   final List<DeviceDiscovery> _deviceDiscoverers = <DeviceDiscovery>[];
@@ -302,6 +304,7 @@ abstract class Device {
     final List<int> indices = new List<int>.generate(table[0].length - 1, (int i) => i);
     List<int> widths = indices.map((int i) => 0).toList();
     for (List<String> row in table) {
+      print('row = $row');
       widths = indices.map((int i) => math.max(widths[i], row[i].length)).toList();
     }
 
