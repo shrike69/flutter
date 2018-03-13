@@ -1347,6 +1347,7 @@ class FlutterView extends ServiceObject {
   }
 
   Future<Null> setAssetDirectory(Uri assetsDirectory) async {
+    return;
     assert(assetsDirectory != null);
     await owner.vmService.vm.invokeRpc('_flutter.setAssetBundlePath',
         params: <String, dynamic>{
