@@ -3,7 +3,7 @@
 // found in the LICENSE file.
 
 import 'package:flutter_driver/flutter_driver.dart';
-import 'package:test/test.dart';
+import 'package:test/test.dart' hide TypeMatcher, isInstanceOf;
 
 void main() {
   FlutterDriver driver;
@@ -13,11 +13,11 @@ void main() {
   });
 
   tearDownAll(() async {
-    driver?.close();
+    await driver?.close();
   });
 
   test('check that we are in normal mode', () async {
     expect(await driver.requestData('status'), 'log: paint');
-    await driver.waitForAbsent(find.byType('PerformanceOverlay'), timeout: Duration.ZERO);
+    await driver.waitForAbsent(find.byType('PerformanceOverlay'), timeout: Duration.zero);
   });
 }

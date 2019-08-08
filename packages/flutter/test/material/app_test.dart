@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 class StateMarker extends StatefulWidget {
@@ -11,7 +12,7 @@ class StateMarker extends StatefulWidget {
   final Widget child;
 
   @override
-  StateMarkerState createState() => new StateMarkerState();
+  StateMarkerState createState() => StateMarkerState();
 }
 
 class StateMarkerState extends State<StateMarker> {
@@ -21,16 +22,16 @@ class StateMarkerState extends State<StateMarker> {
   Widget build(BuildContext context) {
     if (widget.child != null)
       return widget.child;
-    return new Container();
+    return Container();
   }
 }
 
 void main() {
   testWidgets('Can nest apps', (WidgetTester tester) async {
     await tester.pumpWidget(
-      new MaterialApp(
-        home: new MaterialApp(
-          home: const Text('Home sweet home'),
+      const MaterialApp(
+        home: MaterialApp(
+          home: Text('Home sweet home'),
         ),
       ),
     );
@@ -39,11 +40,11 @@ void main() {
   });
 
   testWidgets('Focus handling', (WidgetTester tester) async {
-    final FocusNode focusNode = new FocusNode();
-    await tester.pumpWidget(new MaterialApp(
-      home: new Material(
-        child: new Center(
-          child: new TextField(focusNode: focusNode, autofocus: true),
+    final FocusNode focusNode = FocusNode();
+    await tester.pumpWidget(MaterialApp(
+      home: Material(
+        child: Center(
+          child: TextField(focusNode: focusNode, autofocus: true),
         ),
       ),
     ));
@@ -52,13 +53,13 @@ void main() {
   });
 
   testWidgets('Can place app inside FocusScope', (WidgetTester tester) async {
-    final FocusScopeNode focusScopeNode = new FocusScopeNode();
+    final FocusScopeNode focusScopeNode = FocusScopeNode();
 
-    await tester.pumpWidget(new FocusScope(
+    await tester.pumpWidget(FocusScope(
       autofocus: true,
       node: focusScopeNode,
-      child: new MaterialApp(
-        home: const Text('Home'),
+      child: const MaterialApp(
+        home: Text('Home'),
       ),
     ));
 
@@ -67,8 +68,8 @@ void main() {
 
   testWidgets('Can show grid without losing sync', (WidgetTester tester) async {
     await tester.pumpWidget(
-      new MaterialApp(
-        home: const StateMarker(),
+      const MaterialApp(
+        home: StateMarker(),
       ),
     );
 
@@ -76,9 +77,9 @@ void main() {
     state1.marker = 'original';
 
     await tester.pumpWidget(
-      new MaterialApp(
+      const MaterialApp(
         debugShowMaterialGrid: true,
-        home: const StateMarker(),
+        home: StateMarker(),
       ),
     );
 
@@ -87,14 +88,14 @@ void main() {
     expect(state2.marker, equals('original'));
   });
 
-  testWidgets('Do not rebuild page on the second frame of the route transition', (WidgetTester tester) async {
+  testWidgets('Do not rebuild page during a route transition', (WidgetTester tester) async {
     int buildCounter = 0;
     await tester.pumpWidget(
-      new MaterialApp(
-        home: new Builder(
+      MaterialApp(
+        home: Builder(
           builder: (BuildContext context) {
-            return new Material(
-              child: new RaisedButton(
+            return Material(
+              child: RaisedButton(
                 child: const Text('X'),
                 onPressed: () { Navigator.of(context).pushNamed('/next'); },
               ),
@@ -103,7 +104,7 @@ void main() {
         ),
         routes: <String, WidgetBuilder>{
           '/next': (BuildContext context) {
-            return new Builder(
+            return Builder(
               builder: (BuildContext context) {
                 ++buildCounter;
                 return const Text('Y');
@@ -128,12 +129,84 @@ void main() {
     await tester.pump(const Duration(milliseconds: 10));
     expect(buildCounter, 1);
     await tester.pump(const Duration(seconds: 1));
-    expect(buildCounter, 2);
+    expect(buildCounter, 1);
     expect(find.text('Y'), findsOneWidget);
   });
 
+  testWidgets('Do rebuild the home page if it changes', (WidgetTester tester) async {
+    int buildCounter = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (BuildContext context) {
+            ++buildCounter;
+            return const Text('A');
+          }
+        ),
+      ),
+    );
+    expect(buildCounter, 1);
+    expect(find.text('A'), findsOneWidget);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (BuildContext context) {
+            ++buildCounter;
+            return const Text('B');
+          }
+        ),
+      ),
+    );
+    expect(buildCounter, 2);
+    expect(find.text('B'), findsOneWidget);
+  });
+
+  testWidgets('Do not rebuild the home page if it does not actually change', (WidgetTester tester) async {
+    int buildCounter = 0;
+    final Widget home = Builder(
+      builder: (BuildContext context) {
+        ++buildCounter;
+        return const Placeholder();
+      }
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: home,
+      ),
+    );
+    expect(buildCounter, 1);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: home,
+      ),
+    );
+    expect(buildCounter, 1);
+  });
+
+  testWidgets('Do rebuild pages that come from the routes table if the MaterialApp changes', (WidgetTester tester) async {
+    int buildCounter = 0;
+    final Map<String, WidgetBuilder> routes = <String, WidgetBuilder>{
+      '/': (BuildContext context) {
+        ++buildCounter;
+        return const Placeholder();
+      },
+    };
+    await tester.pumpWidget(
+      MaterialApp(
+        routes: routes,
+      ),
+    );
+    expect(buildCounter, 1);
+    await tester.pumpWidget(
+      MaterialApp(
+        routes: routes,
+      ),
+    );
+    expect(buildCounter, 2);
+  });
+
   testWidgets('Cannot pop the initial route', (WidgetTester tester) async {
-    await tester.pumpWidget(new MaterialApp(home: const Text('Home')));
+    await tester.pumpWidget(const MaterialApp(home: Text('Home')));
 
     expect(find.text('Home'), findsOneWidget);
 
@@ -146,7 +219,7 @@ void main() {
   });
 
   testWidgets('Default initialRoute', (WidgetTester tester) async {
-    await tester.pumpWidget(new MaterialApp(routes: <String, WidgetBuilder>{
+    await tester.pumpWidget(MaterialApp(routes: <String, WidgetBuilder>{
       '/': (BuildContext context) => const Text('route "/"'),
     }));
 
@@ -155,7 +228,7 @@ void main() {
 
   testWidgets('One-step initial route', (WidgetTester tester) async {
     await tester.pumpWidget(
-      new MaterialApp(
+      MaterialApp(
         initialRoute: '/a',
         routes: <String, WidgetBuilder>{
           '/': (BuildContext context) => const Text('route "/"'),
@@ -175,30 +248,30 @@ void main() {
   testWidgets('Return value from pop is correct', (WidgetTester tester) async {
     Future<Object> result;
     await tester.pumpWidget(
-        new MaterialApp(
-          home: new Builder(
+        MaterialApp(
+          home: Builder(
               builder: (BuildContext context) {
-                return new Material(
-                  child: new RaisedButton(
+                return Material(
+                  child: RaisedButton(
                       child: const Text('X'),
                       onPressed: () async {
                         result = Navigator.of(context).pushNamed('/a');
-                      }
+                      },
                   ),
                 );
               }
           ),
           routes: <String, WidgetBuilder>{
             '/a': (BuildContext context) {
-              return new Material(
-                child: new RaisedButton(
+              return Material(
+                child: RaisedButton(
                   child: const Text('Y'),
                   onPressed: () {
                     Navigator.of(context).pop('all done');
                   },
                 ),
               );
-            }
+            },
           },
         )
     );
@@ -212,7 +285,7 @@ void main() {
     expect(await result, equals('all done'));
   });
 
-    testWidgets('Two-step initial route', (WidgetTester tester) async {
+  testWidgets('Two-step initial route', (WidgetTester tester) async {
     final Map<String, WidgetBuilder> routes = <String, WidgetBuilder>{
       '/': (BuildContext context) => const Text('route "/"'),
       '/a': (BuildContext context) => const Text('route "/a"'),
@@ -221,7 +294,7 @@ void main() {
     };
 
     await tester.pumpWidget(
-      new MaterialApp(
+      MaterialApp(
         initialRoute: '/a/b',
         routes: routes,
       )
@@ -241,7 +314,7 @@ void main() {
     };
 
     await tester.pumpWidget(
-      new MaterialApp(
+      MaterialApp(
         initialRoute: '/a/b/c',
         routes: routes,
       )
@@ -263,7 +336,7 @@ void main() {
     };
 
     await tester.pumpWidget(
-      new MaterialApp(
+      MaterialApp(
         initialRoute: '/a',
         routes: routes,
       )
@@ -274,7 +347,7 @@ void main() {
 
     // changing initialRoute has no effect
     await tester.pumpWidget(
-      new MaterialApp(
+      MaterialApp(
         initialRoute: '/b',
         routes: routes,
       )
@@ -284,7 +357,7 @@ void main() {
     expect(find.text('route "/b"'), findsNothing);
 
     // removing it has no effect
-    await tester.pumpWidget(new MaterialApp(routes: routes));
+    await tester.pumpWidget(MaterialApp(routes: routes));
     expect(find.text('route "/"'), findsOneWidget);
     expect(find.text('route "/a"'), findsOneWidget);
     expect(find.text('route "/b"'), findsNothing);
@@ -293,12 +366,14 @@ void main() {
   testWidgets('onGenerateRoute / onUnknownRoute', (WidgetTester tester) async {
     final List<String> log = <String>[];
     await tester.pumpWidget(
-      new MaterialApp(
+      MaterialApp(
         onGenerateRoute: (RouteSettings settings) {
           log.add('onGenerateRoute ${settings.name}');
+          return null;
         },
         onUnknownRoute: (RouteSettings settings) {
           log.add('onUnknownRoute ${settings.name}');
+          return null;
         },
       )
     );
@@ -306,12 +381,23 @@ void main() {
     expect(log, <String>['onGenerateRoute /', 'onUnknownRoute /']);
   });
 
+  testWidgets('MaterialApp with builder and no route information works.', (WidgetTester tester) async {
+    // Regression test for https://github.com/flutter/flutter/issues/18904
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (BuildContext context, Widget child) {
+          return const SizedBox();
+        },
+      ),
+    );
+  });
+
   testWidgets('Can get text scale from media query', (WidgetTester tester) async {
     double textScaleFactor;
-    await tester.pumpWidget(new MaterialApp(
-      home: new Builder(builder:(BuildContext context) {
+    await tester.pumpWidget(MaterialApp(
+      home: Builder(builder:(BuildContext context) {
         textScaleFactor = MediaQuery.of(context).textScaleFactor;
-        return new Container();
+        return Container();
       }),
     ));
     expect(textScaleFactor, isNotNull);
@@ -319,23 +405,324 @@ void main() {
   });
 
   testWidgets('MaterialApp.navigatorKey', (WidgetTester tester) async {
-    final GlobalKey<NavigatorState> key = new GlobalKey<NavigatorState>();
-    await tester.pumpWidget(new MaterialApp(
+    final GlobalKey<NavigatorState> key = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(MaterialApp(
       navigatorKey: key,
       color: const Color(0xFF112233),
       home: const Placeholder(),
     ));
-    expect(key.currentState, const isInstanceOf<NavigatorState>());
-    await tester.pumpWidget(new MaterialApp(
-      color: const Color(0xFF112233),
-      home: const Placeholder(),
+    expect(key.currentState, isInstanceOf<NavigatorState>());
+    await tester.pumpWidget(const MaterialApp(
+      color: Color(0xFF112233),
+      home: Placeholder(),
     ));
     expect(key.currentState, isNull);
-    await tester.pumpWidget(new MaterialApp(
+    await tester.pumpWidget(MaterialApp(
       navigatorKey: key,
       color: const Color(0xFF112233),
       home: const Placeholder(),
     ));
-    expect(key.currentState, const isInstanceOf<NavigatorState>());
+    expect(key.currentState, isInstanceOf<NavigatorState>());
+  });
+
+  testWidgets('Has default material and cupertino localizations', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (BuildContext context) {
+            return Column(
+              children: <Widget>[
+                Text(MaterialLocalizations.of(context).selectAllButtonLabel),
+                Text(CupertinoLocalizations.of(context).selectAllButtonLabel),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+
+    // Default US "select all" text.
+    expect(find.text('SELECT ALL'), findsOneWidget);
+    // Default Cupertino US "select all" text.
+    expect(find.text('Select All'), findsOneWidget);
+  });
+
+  testWidgets('MaterialApp uses regular theme when themeMode is light', (WidgetTester tester) async {
+    // Mock the Window to explicitly report a light platformBrightness.
+    tester.binding.window.platformBrightnessTestValue = Brightness.light;
+
+    ThemeData appliedTheme;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(
+            brightness: Brightness.light
+        ),
+        darkTheme: ThemeData(
+          brightness: Brightness.dark,
+        ),
+        themeMode: ThemeMode.light,
+        home: Builder(
+          builder: (BuildContext context) {
+            appliedTheme = Theme.of(context);
+            return const SizedBox();
+          },
+        ),
+      ),
+    );
+    expect(appliedTheme.brightness, Brightness.light);
+
+    // Mock the Window to explicitly report a dark platformBrightness.
+    tester.binding.window.platformBrightnessTestValue = Brightness.dark;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(
+            brightness: Brightness.light
+        ),
+        darkTheme: ThemeData(
+          brightness: Brightness.dark,
+        ),
+        themeMode: ThemeMode.light,
+        home: Builder(
+          builder: (BuildContext context) {
+            appliedTheme = Theme.of(context);
+            return const SizedBox();
+          },
+        ),
+      ),
+    );
+    expect(appliedTheme.brightness, Brightness.light);
+  });
+
+  testWidgets('MaterialApp uses darkTheme when themeMode is dark', (WidgetTester tester) async {
+    // Mock the Window to explicitly report a light platformBrightness.
+    tester.binding.window.platformBrightnessTestValue = Brightness.light;
+
+    ThemeData appliedTheme;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(
+            brightness: Brightness.light
+        ),
+        darkTheme: ThemeData(
+          brightness: Brightness.dark,
+        ),
+        themeMode: ThemeMode.dark,
+        home: Builder(
+          builder: (BuildContext context) {
+            appliedTheme = Theme.of(context);
+            return const SizedBox();
+          },
+        ),
+      ),
+    );
+    expect(appliedTheme.brightness, Brightness.dark);
+
+    // Mock the Window to explicitly report a dark platformBrightness.
+    tester.binding.window.platformBrightnessTestValue = Brightness.dark;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(
+            brightness: Brightness.light
+        ),
+        darkTheme: ThemeData(
+          brightness: Brightness.dark,
+        ),
+        themeMode: ThemeMode.dark,
+        home: Builder(
+          builder: (BuildContext context) {
+            appliedTheme = Theme.of(context);
+            return const SizedBox();
+          },
+        ),
+      ),
+    );
+    expect(appliedTheme.brightness, Brightness.dark);
+  });
+
+  testWidgets('MaterialApp uses regular theme when themeMode is system and platformBrightness is light', (WidgetTester tester) async {
+    // Mock the Window to explicitly report a light platformBrightness.
+    final TestWidgetsFlutterBinding binding = tester.binding;
+    binding.window.platformBrightnessTestValue = Brightness.light;
+
+    ThemeData appliedTheme;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(
+          brightness: Brightness.light
+        ),
+        darkTheme: ThemeData(
+          brightness: Brightness.dark,
+        ),
+        themeMode: ThemeMode.system,
+        home: Builder(
+          builder: (BuildContext context) {
+            appliedTheme = Theme.of(context);
+            return const SizedBox();
+          },
+        ),
+      ),
+    );
+
+    expect(appliedTheme.brightness, Brightness.light);
+  });
+
+  testWidgets('MaterialApp uses darkTheme when themeMode is system and platformBrightness is dark', (WidgetTester tester) async {
+    // Mock the Window to explicitly report a dark platformBrightness.
+    tester.binding.window.platformBrightnessTestValue = Brightness.dark;
+
+    ThemeData appliedTheme;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(
+            brightness: Brightness.light
+        ),
+        darkTheme: ThemeData(
+          brightness: Brightness.dark,
+        ),
+        themeMode: ThemeMode.system,
+        home: Builder(
+          builder: (BuildContext context) {
+            appliedTheme = Theme.of(context);
+            return const SizedBox();
+          },
+        ),
+      ),
+    );
+    expect(appliedTheme.brightness, Brightness.dark);
+  });
+
+  testWidgets('MaterialApp uses light theme when platformBrightness is dark but no dark theme is provided', (WidgetTester tester) async {
+    // Mock the Window to explicitly report a dark platformBrightness.
+    final TestWidgetsFlutterBinding binding = tester.binding;
+    binding.window.platformBrightnessTestValue = Brightness.dark;
+
+    ThemeData appliedTheme;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(
+          brightness: Brightness.light
+        ),
+        home: Builder(
+          builder: (BuildContext context) {
+            appliedTheme = Theme.of(context);
+            return const SizedBox();
+          },
+        ),
+      ),
+    );
+
+    expect(appliedTheme.brightness, Brightness.light);
+  });
+
+  testWidgets('MaterialApp uses fallback light theme when platformBrightness is dark but no theme is provided at all', (WidgetTester tester) async {
+    // Mock the Window to explicitly report a dark platformBrightness.
+    final TestWidgetsFlutterBinding binding = tester.binding;
+    binding.window.platformBrightnessTestValue = Brightness.dark;
+
+    ThemeData appliedTheme;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (BuildContext context) {
+            appliedTheme = Theme.of(context);
+            return const SizedBox();
+          },
+        ),
+      ),
+    );
+
+    expect(appliedTheme.brightness, Brightness.light);
+  });
+
+  testWidgets('MaterialApp uses fallback light theme when platformBrightness is light and a dark theme is provided', (WidgetTester tester) async {
+    // Mock the Window to explicitly report a dark platformBrightness.
+    final TestWidgetsFlutterBinding binding = tester.binding;
+    binding.window.platformBrightnessTestValue = Brightness.light;
+
+    ThemeData appliedTheme;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        darkTheme: ThemeData(
+          brightness: Brightness.dark,
+        ),
+        home: Builder(
+          builder: (BuildContext context) {
+            appliedTheme = Theme.of(context);
+            return const SizedBox();
+          },
+        ),
+      ),
+    );
+
+    expect(appliedTheme.brightness, Brightness.light);
+  });
+
+  testWidgets('MaterialApp uses dark theme when platformBrightness is dark', (WidgetTester tester) async {
+    // Mock the Window to explicitly report a dark platformBrightness.
+    final TestWidgetsFlutterBinding binding = tester.binding;
+    binding.window.platformBrightnessTestValue = Brightness.dark;
+
+    ThemeData appliedTheme;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(
+          brightness: Brightness.light
+        ),
+        darkTheme: ThemeData(
+          brightness: Brightness.dark,
+        ),
+        home: Builder(
+          builder: (BuildContext context) {
+            appliedTheme = Theme.of(context);
+            return const SizedBox();
+          },
+        ),
+      ),
+    );
+
+    expect(appliedTheme.brightness, Brightness.dark);
+  });
+
+  testWidgets('MaterialApp switches themes when the Window platformBrightness changes.', (WidgetTester tester) async {
+    // Mock the Window to explicitly report a light platformBrightness.
+    final TestWidgetsFlutterBinding binding = tester.binding;
+    binding.window.platformBrightnessTestValue = Brightness.light;
+
+    ThemeData themeBeforeBrightnessChange;
+    ThemeData themeAfterBrightnessChange;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(
+          brightness: Brightness.light
+        ),
+        darkTheme: ThemeData(
+          brightness: Brightness.dark,
+        ),
+        home: Builder(
+          builder: (BuildContext context) {
+            if (themeBeforeBrightnessChange == null) {
+              themeBeforeBrightnessChange = Theme.of(context);
+            } else {
+              themeAfterBrightnessChange = Theme.of(context);
+            }
+            return const SizedBox();
+          },
+        ),
+      ),
+    );
+
+    // Switch the platformBrightness from light to dark and pump the widget tree
+    // to process changes.
+    binding.window.platformBrightnessTestValue = Brightness.dark;
+    await tester.pumpAndSettle();
+
+    expect(themeBeforeBrightnessChange.brightness, Brightness.light);
+    expect(themeAfterBrightnessChange.brightness, Brightness.dark);
   });
 }

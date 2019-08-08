@@ -6,8 +6,10 @@ import 'dart:async';
 
 import '../base/common.dart';
 import '../base/file_system.dart';
+import '../base/platform.dart';
 import '../build_info.dart';
 import '../globals.dart';
+import '../project.dart';
 import '../runner/flutter_command.dart';
 
 class CleanCommand extends FlutterCommand {
@@ -19,20 +21,48 @@ class CleanCommand extends FlutterCommand {
   final String name = 'clean';
 
   @override
-  final String description = 'Delete the build/ directory.';
+  final String description = 'Delete the build/ and .dart_tool/ directories.';
 
   @override
-  Future<Null> runCommand() async {
+  Future<Set<DevelopmentArtifact>> get requiredArtifacts async => const <DevelopmentArtifact>{};
+
+  @override
+  Future<FlutterCommandResult> runCommand() async {
+    final FlutterProject flutterProject = FlutterProject.current();
     final Directory buildDir = fs.directory(getBuildDirectory());
+
     printStatus("Deleting '${buildDir.path}${fs.path.separator}'.");
-
-    if (!buildDir.existsSync())
-      return;
-
-    try {
-      buildDir.deleteSync(recursive: true);
-    } catch (error) {
-      throwToolExit(error.toString());
+    if (buildDir.existsSync()) {
+      try {
+        buildDir.deleteSync(recursive: true);
+      } on FileSystemException catch (error) {
+        if (platform.isWindows) {
+          _windowsDeleteFailure(buildDir.path);
+        }
+        throwToolExit(error.toString());
+      }
     }
+
+    printStatus("Deleting '${flutterProject.dartTool.path}${fs.path.separator}'.");
+    if (flutterProject.dartTool.existsSync()) {
+      try {
+        flutterProject.dartTool.deleteSync(recursive: true);
+      } on FileSystemException catch (error) {
+        if (platform.isWindows) {
+          _windowsDeleteFailure(flutterProject.dartTool.path);
+        }
+        throwToolExit(error.toString());
+      }
+    }
+    return const FlutterCommandResult(ExitStatus.success);
+  }
+
+  void _windowsDeleteFailure(String path) {
+    printError(
+      'Failed to remove $path. '
+      'A program may still be using a file in the directory or the directory itself. '
+      'To find and stop such a program, see: '
+      'https://superuser.com/questions/1333118/cant-delete-empty-folder-because-it-is-used');
   }
 }
+

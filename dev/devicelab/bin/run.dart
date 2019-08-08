@@ -19,7 +19,7 @@ List<String> _taskNames = <String>[];
 ///
 /// The tasks are chosen depending on the command-line options
 /// (see [_argParser]).
-Future<Null> main(List<String> rawArgs) async {
+Future<void> main(List<String> rawArgs) async {
   ArgResults args;
   try {
     args = _argParser.parse(rawArgs);
@@ -28,7 +28,7 @@ Future<Null> main(List<String> rawArgs) async {
     stderr.writeln('Usage:\n');
     stderr.writeln(_argParser.usage);
     exitCode = 1;
-    return null;
+    return;
   }
 
   if (!args.wasParsed('task')) {
@@ -50,14 +50,21 @@ Future<Null> main(List<String> rawArgs) async {
   if (_taskNames.isEmpty) {
     stderr.writeln('Failed to find tasks to run based on supplied options.');
     exitCode = 1;
-    return null;
+    return;
   }
 
   final bool silent = args['silent'];
+  final String localEngine = args['local-engine'];
+  final String localEngineSrcPath = args['local-engine-src-path'];
 
   for (String taskName in _taskNames) {
     section('Running task "$taskName"');
-    final Map<String, dynamic> result = await runTask(taskName, silent: silent);
+    final Map<String, dynamic> result = await runTask(
+      taskName,
+      silent: silent,
+      localEngine: localEngine,
+      localEngineSrcPath: localEngineSrcPath,
+    );
 
     if (!result['success'])
       exitCode = 1;
@@ -69,11 +76,10 @@ Future<Null> main(List<String> rawArgs) async {
 }
 
 /// Command-line options for the `run.dart` command.
-final ArgParser _argParser = new ArgParser()
-  ..addOption(
+final ArgParser _argParser = ArgParser()
+  ..addMultiOption(
     'task',
     abbr: 't',
-    allowMultiple: true,
     splitCommas: true,
     help: 'Either:\n'
         ' - the name of a task defined in manifest.yaml. Example: complex_layout__start_up.\n'
@@ -90,7 +96,7 @@ final ArgParser _argParser = new ArgParser()
           _taskNames.add(nameOrPath);
         } else if (!isDartFile || fragments.length != 3 || !_listsEqual(<String>['bin', 'tasks'], fragments.take(2).toList())) {
           // Unsupported executable location
-          throw new FormatException('Invalid value for option -t (--task): $nameOrPath');
+          throw FormatException('Invalid value for option -t (--task): $nameOrPath');
         } else {
           _taskNames.add(path.withoutExtension(fragments.last));
         }
@@ -101,17 +107,16 @@ final ArgParser _argParser = new ArgParser()
     'stage',
     abbr: 's',
     help: 'Name of the stage. Runs all tasks for that stage. '
-        'The tasks and their stages are read from manifest.yaml.',
+          'The tasks and their stages are read from manifest.yaml.',
   )
   ..addFlag(
     'all',
     abbr: 'a',
     help: 'Runs all tasks defined in manifest.yaml.',
   )
-  ..addOption(
+  ..addMultiOption(
     'test',
     hide: true,
-    allowMultiple: true,
     splitCommas: true,
     callback: (List<String> value) {
       if (value.isNotEmpty) {
@@ -125,6 +130,19 @@ final ArgParser _argParser = new ArgParser()
     'silent',
     negatable: true,
     defaultsTo: false,
+  )
+  ..addOption(
+    'local-engine',
+    help: 'Name of a build output within the engine out directory, if you are '
+          'building Flutter locally. Use this to select a specific version of '
+          'the engine if you have built multiple engine targets. This path is '
+          'relative to --local-engine-src-path/out.',
+  )
+  ..addOption(
+    'local-engine-src-path',
+    help: 'Path to your engine src directory, if you are building Flutter '
+          'locally. Defaults to \$FLUTTER_ENGINE if set, or tries to guess at '
+          'the location based on the value of the --flutter-root option.',
   );
 
 bool _listsEqual(List<dynamic> a, List<dynamic> b) {

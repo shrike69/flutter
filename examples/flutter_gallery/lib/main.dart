@@ -3,9 +3,9 @@
 // found in the LICENSE file.
 
 // Thanks for checking out Flutter!
-// Like what you see? Tweet us @flutterio
+// Like what you see? Tweet us @FlutterDev
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 
 import 'gallery/app.dart';
 

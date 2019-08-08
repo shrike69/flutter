@@ -3,149 +3,137 @@
 // found in the LICENSE file.
 
 import 'dart:async';
+import 'dart:io' as io;
 
-import 'package:flutter_tools/src/artifacts.dart';
+import 'package:flutter_tools/src/android/android_workflow.dart';
 import 'package:flutter_tools/src/base/config.dart';
 import 'package:flutter_tools/src/base/context.dart';
 import 'package:flutter_tools/src/base/file_system.dart';
 import 'package:flutter_tools/src/base/io.dart';
 import 'package:flutter_tools/src/base/logger.dart';
 import 'package:flutter_tools/src/base/os.dart';
-import 'package:flutter_tools/src/base/platform.dart';
-import 'package:flutter_tools/src/base/port_scanner.dart';
+import 'package:flutter_tools/src/base/terminal.dart';
+import 'package:flutter_tools/src/base/time.dart';
 import 'package:flutter_tools/src/cache.dart';
-import 'package:flutter_tools/src/devfs.dart';
+import 'package:flutter_tools/src/context_runner.dart';
 import 'package:flutter_tools/src/device.dart';
 import 'package:flutter_tools/src/doctor.dart';
-import 'package:flutter_tools/src/ios/mac.dart';
 import 'package:flutter_tools/src/ios/simulators.dart';
-import 'package:flutter_tools/src/run_hot.dart';
-import 'package:flutter_tools/src/usage.dart';
+import 'package:flutter_tools/src/ios/xcodeproj.dart';
+import 'package:flutter_tools/src/project.dart';
+import 'package:flutter_tools/src/reporting/reporting.dart';
 import 'package:flutter_tools/src/version.dart';
+import 'package:meta/meta.dart';
 import 'package:mockito/mockito.dart';
-import 'package:process/process.dart';
-import 'package:quiver/time.dart';
-import 'package:test/test.dart';
 
 import 'common.dart';
 
+export 'package:flutter_tools/src/base/context.dart' show Generator;
+
 /// Return the test logger. This assumes that the current Logger is a BufferLogger.
-BufferLogger get testLogger => context[Logger];
+BufferLogger get testLogger => context.get<Logger>();
 
-MockDeviceManager get testDeviceManager => context[DeviceManager];
-MockDoctor get testDoctor => context[Doctor];
+FakeDeviceManager get testDeviceManager => context.get<DeviceManager>();
+FakeDoctor get testDoctor => context.get<Doctor>();
 
-typedef dynamic Generator();
+typedef ContextInitializer = void Function(AppContext testContext);
 
-typedef void ContextInitializer(AppContext testContext);
-
-void _defaultInitializeContext(AppContext testContext) {
-  testContext
-    ..putIfAbsent(DeviceManager, () => new MockDeviceManager())
-    ..putIfAbsent(DevFSConfig, () => new DevFSConfig())
-    ..putIfAbsent(Doctor, () => new MockDoctor())
-    ..putIfAbsent(HotRunnerConfig, () => new HotRunnerConfig())
-    ..putIfAbsent(Cache, () => new Cache())
-    ..putIfAbsent(Artifacts, () => new CachedArtifacts())
-    ..putIfAbsent(OperatingSystemUtils, () => new MockOperatingSystemUtils())
-    ..putIfAbsent(PortScanner, () => new MockPortScanner())
-    ..putIfAbsent(Xcode, () => new Xcode())
-    ..putIfAbsent(IOSSimulatorUtils, () {
-      final MockIOSSimulatorUtils mock = new MockIOSSimulatorUtils();
-      when(mock.getAttachedDevices()).thenReturn(<IOSSimulator>[]);
-      return mock;
-    })
-    ..putIfAbsent(SimControl, () => new MockSimControl())
-    ..putIfAbsent(Usage, () => new MockUsage())
-    ..putIfAbsent(FlutterVersion, () => new MockFlutterVersion())
-    ..putIfAbsent(Clock, () => const Clock())
-    ..putIfAbsent(HttpClient, () => new MockHttpClient());
-}
-
-void testUsingContext(String description, dynamic testMethod(), {
+@isTest
+void testUsingContext(
+  String description,
+  dynamic testMethod(), {
   Timeout timeout,
-  Map<Type, Generator> overrides: const <Type, Generator>{},
-  ContextInitializer initializeContext: _defaultInitializeContext,
+  Map<Type, Generator> overrides = const <Type, Generator>{},
+  bool initializeFlutterRoot = true,
   String testOn,
   bool skip, // should default to `false`, but https://github.com/dart-lang/test/issues/545 doesn't allow this
 }) {
-
   // Ensure we don't rely on the default [Config] constructor which will
   // leak a sticky $HOME/.flutter_settings behind!
   Directory configDir;
   tearDown(() {
-    configDir?.deleteSync(recursive: true);
-    configDir = null;
+    if (configDir != null) {
+      tryToDelete(configDir);
+      configDir = null;
+    }
   });
   Config buildConfig(FileSystem fs) {
-    configDir = fs.systemTempDirectory.createTempSync('config-dir');
+    configDir = fs.systemTempDirectory.createTempSync('flutter_config_dir_test.');
     final File settingsFile = fs.file(
-        fs.path.join(configDir.path, '.flutter_settings'));
-    return new Config(settingsFile);
+      fs.path.join(configDir.path, '.flutter_settings')
+    );
+    return Config(settingsFile);
   }
 
   test(description, () async {
-    final AppContext testContext = new AppContext();
-
-    // The context always starts with these value since others depend on them.
-    testContext
-      ..putIfAbsent(Stdio, () => const Stdio())
-      ..putIfAbsent(Platform, () => const LocalPlatform())
-      ..putIfAbsent(FileSystem, () => const LocalFileSystem())
-      ..putIfAbsent(ProcessManager, () => const LocalProcessManager())
-      ..putIfAbsent(Logger, () => new BufferLogger())
-      ..putIfAbsent(Config, () => buildConfig(testContext[FileSystem]));
-
-    // Apply the initializer after seeding the base value above.
-    initializeContext(testContext);
-
-    final String flutterRoot = getFlutterRoot();
-
-    try {
-      return await testContext.runInZone(() async {
-        // Apply the overrides to the test context in the zone since their
-        // instantiation may reference items already stored on the context.
-        overrides.forEach((Type type, dynamic value()) {
-          context.setVariable(type, value());
-        });
-
-        // Provide a sane default for the flutterRoot directory. Individual
-        // tests can override this either in the test or during setup.
-        Cache.flutterRoot ??= flutterRoot;
-
-        return await testMethod();
-      }, onError: (dynamic error, StackTrace stackTrace) {
-        _printBufferedErrors(testContext);
-        throw error;
-      });
-    } catch (error) {
-      _printBufferedErrors(testContext);
-      rethrow;
-    }
-
-  }, timeout: timeout, testOn: testOn, skip: skip);
+    await runInContext<dynamic>(() {
+      return context.run<dynamic>(
+        name: 'mocks',
+        overrides: <Type, Generator>{
+          Config: () => buildConfig(fs),
+          DeviceManager: () => FakeDeviceManager(),
+          Doctor: () => FakeDoctor(),
+          FlutterVersion: () => MockFlutterVersion(),
+          HttpClient: () => MockHttpClient(),
+          IOSSimulatorUtils: () {
+            final MockIOSSimulatorUtils mock = MockIOSSimulatorUtils();
+            when(mock.getAttachedDevices()).thenReturn(<IOSSimulator>[]);
+            return mock;
+          },
+          OutputPreferences: () => OutputPreferences(showColor: false),
+          Logger: () => BufferLogger(),
+          OperatingSystemUtils: () => FakeOperatingSystemUtils(),
+          SimControl: () => MockSimControl(),
+          Usage: () => FakeUsage(),
+          XcodeProjectInterpreter: () => FakeXcodeProjectInterpreter(),
+          FileSystem: () => LocalFileSystemBlockingSetCurrentDirectory(),
+          TimeoutConfiguration: () => const TimeoutConfiguration(),
+        },
+        body: () {
+          final String flutterRoot = getFlutterRoot();
+          return runZoned<Future<dynamic>>(() {
+            try {
+              return context.run<dynamic>(
+                // Apply the overrides to the test context in the zone since their
+                // instantiation may reference items already stored on the context.
+                overrides: overrides,
+                name: 'test-specific overrides',
+                body: () async {
+                  if (initializeFlutterRoot) {
+                    // Provide a sane default for the flutterRoot directory. Individual
+                    // tests can override this either in the test or during setup.
+                    Cache.flutterRoot ??= flutterRoot;
+                  }
+                  return await testMethod();
+                },
+              );
+            } catch (error) {
+              _printBufferedErrors(context);
+              rethrow;
+            }
+          }, onError: (dynamic error, StackTrace stackTrace) {
+            io.stdout.writeln(error);
+            io.stdout.writeln(stackTrace);
+            _printBufferedErrors(context);
+            throw error;
+          });
+        },
+      );
+    });
+  }, timeout: timeout ?? const Timeout(Duration(seconds: 60)),
+      testOn: testOn, skip: skip);
 }
 
 void _printBufferedErrors(AppContext testContext) {
-  if (testContext[Logger] is BufferLogger) {
-    final BufferLogger bufferLogger = testContext[Logger];
+  if (testContext.get<Logger>() is BufferLogger) {
+    final BufferLogger bufferLogger = testContext.get<Logger>();
     if (bufferLogger.errorText.isNotEmpty)
       print(bufferLogger.errorText);
     bufferLogger.clear();
   }
 }
 
-class MockPortScanner extends PortScanner {
-  static int _nextAvailablePort = 12345;
-
-  @override
-  Future<bool> isPortAvailable(int port) async => true;
-
-  @override
-  Future<int> findAvailablePort() async => _nextAvailablePort++;
-}
-
-class MockDeviceManager implements DeviceManager {
+class FakeDeviceManager implements DeviceManager {
   List<Device> devices = <Device>[];
 
   String _specifiedDeviceId;
@@ -171,11 +159,11 @@ class MockDeviceManager implements DeviceManager {
   }
 
   @override
-  Stream<Device> getAllConnectedDevices() => new Stream<Device>.fromIterable(devices);
+  Stream<Device> getAllConnectedDevices() => Stream<Device>.fromIterable(devices);
 
   @override
   Stream<Device> getDevicesById(String deviceId) {
-    return new Stream<Device>.fromIterable(
+    return Stream<Device>.fromIterable(
         devices.where((Device device) => device.id == deviceId));
   }
 
@@ -193,9 +181,27 @@ class MockDeviceManager implements DeviceManager {
 
   @override
   Future<List<String>> getDeviceDiagnostics() async => <String>[];
+
+  @override
+  List<DeviceDiscovery> get deviceDiscoverers => <DeviceDiscovery>[];
+
+  @override
+  bool isDeviceSupportedForProject(Device device, FlutterProject flutterProject) {
+    return device.isSupportedForProject(flutterProject);
+  }
+
+  @override
+  Future<List<Device>> findTargetDevices(FlutterProject flutterProject) async {
+    return devices;
+  }
 }
 
-class MockDoctor extends Doctor {
+class FakeAndroidLicenseValidator extends AndroidLicenseValidator {
+  @override
+  Future<LicensesAccepted> get licensesAccepted async => LicensesAccepted.all;
+}
+
+class FakeDoctor extends Doctor {
   // True for testing.
   @override
   bool get canListAnything => true;
@@ -203,6 +209,20 @@ class MockDoctor extends Doctor {
   // True for testing.
   @override
   bool get canLaunchAnything => true;
+
+  @override
+  /// Replaces the android workflow with a version that overrides licensesAccepted,
+  /// to prevent individual tests from having to mock out the process for
+  /// the Doctor.
+  List<DoctorValidator> get validators {
+    final List<DoctorValidator> superValidators = super.validators;
+    return superValidators.map<DoctorValidator>((DoctorValidator v) {
+      if (v is AndroidLicenseValidator) {
+        return FakeAndroidLicenseValidator();
+      }
+      return v;
+    }).toList();
+  }
 }
 
 class MockSimControl extends Mock implements SimControl {
@@ -211,17 +231,50 @@ class MockSimControl extends Mock implements SimControl {
   }
 }
 
-class MockOperatingSystemUtils extends Mock implements OperatingSystemUtils {
+class FakeOperatingSystemUtils implements OperatingSystemUtils {
+  @override
+  ProcessResult makeExecutable(File file) => null;
+
+  @override
+  void chmod(FileSystemEntity entity, String mode) { }
+
+  @override
+  File which(String execName) => null;
+
   @override
   List<File> whichAll(String execName) => <File>[];
 
   @override
+  File makePipe(String path) => null;
+
+  @override
+  void zip(Directory data, File zipFile) { }
+
+  @override
+  void unzip(File file, Directory targetDirectory) { }
+
+  @override
+  bool verifyZip(File file) => true;
+
+  @override
+  void unpack(File gzippedTarFile, Directory targetDirectory) { }
+
+  @override
+  bool verifyGzip(File gzippedFile) => true;
+
+  @override
   String get name => 'fake OS name and version';
+
+  @override
+  String get pathVarSeparator => ';';
+
+  @override
+  Future<int> findFreePort({bool ipv6 = false}) async => 12345;
 }
 
 class MockIOSSimulatorUtils extends Mock implements IOSSimulatorUtils {}
 
-class MockUsage implements Usage {
+class FakeUsage implements Usage {
   @override
   bool get isFirstRun => false;
 
@@ -250,20 +303,65 @@ class MockUsage implements Usage {
   void sendTiming(String category, String variableName, Duration duration, { String label }) { }
 
   @override
-  void sendException(dynamic exception, StackTrace trace) { }
+  void sendException(dynamic exception) { }
 
   @override
   Stream<Map<String, dynamic>> get onSend => null;
 
   @override
-  Future<Null> ensureAnalyticsSent() => new Future<Null>.value();
+  Future<void> ensureAnalyticsSent() => Future<void>.value();
 
   @override
   void printWelcome() { }
 }
 
-class MockFlutterVersion extends Mock implements FlutterVersion {}
+class FakeXcodeProjectInterpreter implements XcodeProjectInterpreter {
+  @override
+  bool get isInstalled => true;
 
-class MockClock extends Mock implements Clock {}
+  @override
+  String get versionText => 'Xcode 9.2';
+
+  @override
+  int get majorVersion => 9;
+
+  @override
+  int get minorVersion => 2;
+
+  @override
+  Map<String, String> getBuildSettings(String projectPath, String target) {
+    return <String, String>{};
+  }
+
+  @override
+  Future<XcodeProjectInfo> getInfo(String projectPath) async {
+    return XcodeProjectInfo(
+      <String>['Runner'],
+      <String>['Debug', 'Release'],
+      <String>['Runner'],
+    );
+  }
+}
+
+class MockFlutterVersion extends Mock implements FlutterVersion {
+  MockFlutterVersion({bool isStable = false}) : _isStable = isStable;
+
+  final bool _isStable;
+
+  @override
+  bool get isMaster => !_isStable;
+}
+
+class MockClock extends Mock implements SystemClock {}
 
 class MockHttpClient extends Mock implements HttpClient {}
+
+class LocalFileSystemBlockingSetCurrentDirectory extends LocalFileSystem {
+  @override
+  set currentDirectory(dynamic value) {
+    throw 'fs.currentDirectory should not be set on the local file system during '
+          'tests as this can cause race conditions with concurrent tests. '
+          'Consider using a MemoryFileSystem for testing if possible or refactor '
+          'code to not require setting fs.currentDirectory.';
+  }
+}

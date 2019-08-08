@@ -8,15 +8,18 @@
 ///
 /// See also:
 ///
-///  * [flutter.io/widgets](https://flutter.io/widgets/)
+///  * [flutter.dev/widgets](https://flutter.dev/widgets/)
 ///    for a catalog of commonly-used Flutter widgets.
 library widgets;
 
 export 'package:vector_math/vector_math_64.dart' show Matrix4;
 
+export 'src/widgets/actions.dart';
 export 'src/widgets/animated_cross_fade.dart';
 export 'src/widgets/animated_list.dart';
 export 'src/widgets/animated_size.dart';
+export 'src/widgets/animated_switcher.dart';
+export 'src/widgets/annotated_region.dart';
 export 'src/widgets/app.dart';
 export 'src/widgets/async.dart';
 export 'src/widgets/automatic_keep_alive.dart';
@@ -24,14 +27,17 @@ export 'src/widgets/banner.dart';
 export 'src/widgets/basic.dart';
 export 'src/widgets/binding.dart';
 export 'src/widgets/bottom_navigation_bar_item.dart';
+export 'src/widgets/color_filter.dart';
 export 'src/widgets/container.dart';
 export 'src/widgets/debug.dart';
 export 'src/widgets/dismissible.dart';
 export 'src/widgets/drag_target.dart';
+export 'src/widgets/draggable_scrollable_sheet.dart';
 export 'src/widgets/editable_text.dart';
 export 'src/widgets/fade_in_image.dart';
 export 'src/widgets/focus_manager.dart';
 export 'src/widgets/focus_scope.dart';
+export 'src/widgets/focus_traversal.dart';
 export 'src/widgets/form.dart';
 export 'src/widgets/framework.dart';
 export 'src/widgets/gesture_detector.dart';
@@ -44,6 +50,8 @@ export 'src/widgets/icon_theme_data.dart';
 export 'src/widgets/image.dart';
 export 'src/widgets/image_icon.dart';
 export 'src/widgets/implicit_animations.dart';
+export 'src/widgets/inherited_model.dart';
+export 'src/widgets/inherited_notifier.dart';
 export 'src/widgets/layout_builder.dart';
 export 'src/widgets/list_wheel_scroll_view.dart';
 export 'src/widgets/localizations.dart';
@@ -61,6 +69,7 @@ export 'src/widgets/page_view.dart';
 export 'src/widgets/pages.dart';
 export 'src/widgets/performance_overlay.dart';
 export 'src/widgets/placeholder.dart';
+export 'src/widgets/platform_view.dart';
 export 'src/widgets/preferred_size.dart';
 export 'src/widgets/primary_scroll_controller.dart';
 export 'src/widgets/raw_keyboard_listener.dart';
@@ -80,11 +89,14 @@ export 'src/widgets/scroll_view.dart';
 export 'src/widgets/scrollable.dart';
 export 'src/widgets/scrollbar.dart';
 export 'src/widgets/semantics_debugger.dart';
+export 'src/widgets/shortcuts.dart';
 export 'src/widgets/single_child_scroll_view.dart';
 export 'src/widgets/size_changed_layout_notifier.dart';
 export 'src/widgets/sliver.dart';
+export 'src/widgets/sliver_layout_builder.dart';
 export 'src/widgets/sliver_persistent_header.dart';
 export 'src/widgets/sliver_prototype_extent_list.dart';
+export 'src/widgets/spacer.dart';
 export 'src/widgets/status_transitions.dart';
 export 'src/widgets/table.dart';
 export 'src/widgets/text.dart';
@@ -94,6 +106,9 @@ export 'src/widgets/ticker_provider.dart';
 export 'src/widgets/title.dart';
 export 'src/widgets/transitions.dart';
 export 'src/widgets/unique_widget.dart';
+export 'src/widgets/value_listenable_builder.dart';
 export 'src/widgets/viewport.dart';
+export 'src/widgets/visibility.dart';
 export 'src/widgets/widget_inspector.dart';
+export 'src/widgets/widget_span.dart';
 export 'src/widgets/will_pop_scope.dart';

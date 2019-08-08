@@ -2,25 +2,24 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'dart:convert' show JSON;
-
 import '../base/io.dart' show stdout;
+import '../convert.dart';
 import 'watcher.dart';
 
 /// Prints JSON events when running a test in --machine mode.
 class EventPrinter extends TestWatcher {
-  EventPrinter({StringSink out}) : this._out = out == null ? stdout: out;
+  EventPrinter({StringSink out}) : _out = out ?? stdout;
 
   final StringSink _out;
 
   @override
-  void onStartedProcess(ProcessEvent event) {
+  void handleStartedProcess(ProcessEvent event) {
     _sendEvent('test.startedProcess',
         <String, dynamic>{'observatoryUri': event.observatoryUri.toString()});
   }
 
-  void _sendEvent(String name, [dynamic params]) {
-    final Map<String, dynamic> map = <String, dynamic>{ 'event': name};
+  void _sendEvent(String name, [ dynamic params ]) {
+    final Map<String, dynamic> map = <String, dynamic>{'event': name};
     if (params != null) {
       map['params'] = params;
     }
@@ -28,7 +27,7 @@ class EventPrinter extends TestWatcher {
   }
 
   void _send(Map<String, dynamic> command) {
-    final String encoded = JSON.encode(command, toEncodable: _jsonEncodeObject);
+    final String encoded = json.encode(command, toEncodable: _jsonEncodeObject);
     _out.writeln('\n[$encoded]');
   }
 

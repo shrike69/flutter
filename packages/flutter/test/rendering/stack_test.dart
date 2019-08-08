@@ -3,30 +3,30 @@
 // found in the LICENSE file.
 
 import 'package:flutter/rendering.dart';
-import 'package:test/test.dart';
+import '../flutter_test_alternative.dart';
 
 import 'rendering_tester.dart';
 
 void main() {
   test('Stack can layout with top, right, bottom, left 0.0', () {
-    final RenderBox size = new RenderConstrainedBox(
-      additionalConstraints: new BoxConstraints.tight(const Size(100.0, 100.0))
+    final RenderBox size = RenderConstrainedBox(
+      additionalConstraints: BoxConstraints.tight(const Size(100.0, 100.0))
     );
 
-    final RenderBox red = new RenderDecoratedBox(
+    final RenderBox red = RenderDecoratedBox(
       decoration: const BoxDecoration(
-        color: const Color(0xFFFF0000),
+        color: Color(0xFFFF0000),
       ),
-      child: size
+      child: size,
     );
 
-    final RenderBox green = new RenderDecoratedBox(
+    final RenderBox green = RenderDecoratedBox(
       decoration: const BoxDecoration(
-        color: const Color(0xFFFF0000),
+        color: Color(0xFFFF0000),
       ),
     );
 
-    final RenderBox stack = new RenderStack(
+    final RenderBox stack = RenderStack(
       textDirection: TextDirection.ltr,
       children: <RenderBox>[red, green],
     );
@@ -49,33 +49,44 @@ void main() {
     expect(green.size.height, equals(100.0));
   });
 
+  test('Stack can layout with no children', () {
+    final RenderBox stack = RenderStack(
+      textDirection: TextDirection.ltr,
+      children: <RenderBox>[],
+    );
+
+    layout(stack, constraints: BoxConstraints.tight(const Size(100.0, 100.0)));
+
+    expect(stack.size.width, equals(100.0));
+    expect(stack.size.height, equals(100.0));
+  });
 
   group('RenderIndexedStack', () {
     test('visitChildrenForSemantics only visits displayed child', () {
-      final RenderBox child1 = new RenderConstrainedBox(
-          additionalConstraints: new BoxConstraints.tight(const Size(100.0, 100.0))
+      final RenderBox child1 = RenderConstrainedBox(
+          additionalConstraints: BoxConstraints.tight(const Size(100.0, 100.0))
       );
-      final RenderBox child2 = new RenderConstrainedBox(
-          additionalConstraints: new BoxConstraints.tight(const Size(100.0, 100.0))
+      final RenderBox child2 = RenderConstrainedBox(
+          additionalConstraints: BoxConstraints.tight(const Size(100.0, 100.0))
       );
-      final RenderBox child3 = new RenderConstrainedBox(
-          additionalConstraints: new BoxConstraints.tight(const Size(100.0, 100.0))
+      final RenderBox child3 = RenderConstrainedBox(
+          additionalConstraints: BoxConstraints.tight(const Size(100.0, 100.0))
       );
-      final RenderBox stack = new RenderIndexedStack(
+      final RenderBox stack = RenderIndexedStack(
           index: 1,
           textDirection: TextDirection.ltr,
           children: <RenderBox>[child1, child2, child3],
       );
 
-      final List<RenderObject> vistedChildren = <RenderObject>[];
+      final List<RenderObject> visitedChildren = <RenderObject>[];
       final RenderObjectVisitor visitor = (RenderObject child) {
-        vistedChildren.add(child);
+        visitedChildren.add(child);
       };
 
       stack.visitChildrenForSemantics(visitor);
 
-      expect(vistedChildren, hasLength(1));
-      expect(vistedChildren.first, child2);
+      expect(visitedChildren, hasLength(1));
+      expect(visitedChildren.first, child2);
     });
 
   });

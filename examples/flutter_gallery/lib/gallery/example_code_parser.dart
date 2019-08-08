@@ -17,7 +17,7 @@ Future<String> getExampleCode(String tag, AssetBundle bundle) async {
   return _exampleCode[tag];
 }
 
-Future<Null> _parseExampleCode(AssetBundle bundle) async {
+Future<void> _parseExampleCode(AssetBundle bundle) async {
   final String code = await bundle.loadString('lib/gallery/example_code.dart') ??
     '// lib/gallery/example_code.dart not found\n';
   _exampleCode = <String, String>{};
@@ -33,7 +33,7 @@ Future<Null> _parseExampleCode(AssetBundle bundle) async {
       if (line.startsWith(_kStartTag)) {
         // Starting a new code block.
         codeBlock = <String>[];
-        codeTag = line.substring(_kStartTag.length);
+        codeTag = line.substring(_kStartTag.length).trim();
       } else {
         // Just skipping the line.
       }
@@ -46,7 +46,9 @@ Future<Null> _parseExampleCode(AssetBundle bundle) async {
         codeTag = null;
       } else {
         // Add to the current block
-        codeBlock.add(line);
+        // trimRight() to remove any \r on Windows
+        // without removing any useful indentation
+        codeBlock.add(line.trimRight());
       }
     }
   }

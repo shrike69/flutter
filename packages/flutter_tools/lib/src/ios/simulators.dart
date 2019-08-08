@@ -3,7 +3,6 @@
 // found in the LICENSE file.
 
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math' as math;
 
 import '../application_package.dart';
@@ -14,15 +13,21 @@ import '../base/io.dart';
 import '../base/platform.dart';
 import '../base/process.dart';
 import '../base/process_manager.dart';
+import '../base/utils.dart';
 import '../build_info.dart';
+import '../bundle.dart';
+import '../convert.dart';
 import '../device.dart';
-import '../flx.dart' as flx;
 import '../globals.dart';
+import '../macos/xcode.dart';
+import '../project.dart';
 import '../protocol_discovery.dart';
 import 'ios_workflow.dart';
 import 'mac.dart';
+import 'plist_utils.dart';
 
 const String _xcrunPath = '/usr/bin/xcrun';
+const String iosSimulatorId = 'apple_ios_simulator';
 
 class IOSSimulators extends PollingDeviceDiscovery {
   IOSSimulators() : super('iOS simulators');
@@ -39,14 +44,14 @@ class IOSSimulators extends PollingDeviceDiscovery {
 
 class IOSSimulatorUtils {
   /// Returns [IOSSimulatorUtils] active in the current app context (i.e. zone).
-  static IOSSimulatorUtils get instance => context[IOSSimulatorUtils];
+  static IOSSimulatorUtils get instance => context.get<IOSSimulatorUtils>();
 
   List<IOSSimulator> getAttachedDevices() {
     if (!xcode.isInstalledAndMeetsVersionCheck)
       return <IOSSimulator>[];
 
-    return SimControl.instance.getConnectedDevices().map((SimDevice device) {
-      return new IOSSimulator(device.udid, name: device.name, category: device.category);
+    return SimControl.instance.getConnectedDevices().map<IOSSimulator>((SimDevice device) {
+      return IOSSimulator(device.udid, name: device.name, simulatorCategory: device.category);
     }).toList();
   }
 }
@@ -54,14 +59,11 @@ class IOSSimulatorUtils {
 /// A wrapper around the `simctl` command line tool.
 class SimControl {
   /// Returns [SimControl] active in the current app context (i.e. zone).
-  static SimControl get instance => context[SimControl];
+  static SimControl get instance => context.get<SimControl>();
 
   /// Runs `simctl list --json` and returns the JSON of the corresponding
   /// [section].
-  ///
-  /// The return type depends on the [section] being listed but is usually
-  /// either a [Map] or a [List].
-  dynamic _list(SimControlListSection section) {
+  Map<String, dynamic> _list(SimControlListSection section) {
     // Sample output from `simctl list --json`:
     //
     // {
@@ -87,7 +89,7 @@ class SimControl {
       return <String, Map<String, dynamic>>{};
     }
 
-    return JSON.decode(results.stdout)[section.name];
+    return json.decode(results.stdout)[section.name];
   }
 
   /// Returns a list of all available devices, both potential and connected.
@@ -97,10 +99,9 @@ class SimControl {
     final Map<String, dynamic> devicesSection = _list(SimControlListSection.devices);
 
     for (String deviceCategory in devicesSection.keys) {
-      final List<Map<String, String>> devicesData = devicesSection[deviceCategory];
-
-      for (Map<String, String> data in devicesData) {
-        devices.add(new SimDevice(deviceCategory, data));
+      final List<dynamic> devicesData = devicesSection[deviceCategory];
+      for (Map<String, dynamic> data in devicesData.map<Map<String, dynamic>>(castStringKeyedMap)) {
+        devices.add(SimDevice(deviceCategory, data));
       }
     }
 
@@ -122,23 +123,49 @@ class SimControl {
     ]);
   }
 
-  Future<Null> install(String deviceId, String appPath) {
-    return runCheckedAsync(<String>[_xcrunPath, 'simctl', 'install', deviceId, appPath]);
+  Future<RunResult> install(String deviceId, String appPath) {
+    Future<RunResult> result;
+    try {
+      result = runCheckedAsync(<String>[_xcrunPath, 'simctl', 'install', deviceId, appPath]);
+    } on ProcessException catch (exception) {
+      throwToolExit('Unable to install $appPath on $deviceId:\n$exception');
+    }
+    return result;
   }
 
-  Future<Null> uninstall(String deviceId, String appId) {
-    return runCheckedAsync(<String>[_xcrunPath, 'simctl', 'uninstall', deviceId, appId]);
+  Future<RunResult> uninstall(String deviceId, String appId) {
+    Future<RunResult> result;
+    try {
+      result = runCheckedAsync(<String>[_xcrunPath, 'simctl', 'uninstall', deviceId, appId]);
+    } on ProcessException catch (exception) {
+      throwToolExit('Unable to uninstall $appId from $deviceId:\n$exception');
+    }
+    return result;
   }
 
-  Future<Null> launch(String deviceId, String appIdentifier, [List<String> launchArgs]) {
-    final List<String> args = <String>[_xcrunPath, 'simctl', 'launch', deviceId, appIdentifier];
-    if (launchArgs != null)
-      args.addAll(launchArgs);
-    return runCheckedAsync(args);
+  Future<RunResult> launch(String deviceId, String appIdentifier, [ List<String> launchArgs ]) {
+    Future<RunResult> result;
+    try {
+      result = runCheckedAsync(<String>[
+        _xcrunPath,
+        'simctl',
+        'launch',
+        deviceId,
+        appIdentifier,
+        ...?launchArgs,
+      ]);
+    } on ProcessException catch (exception) {
+      throwToolExit('Unable to launch $appIdentifier on $deviceId:\n$exception');
+    }
+    return result;
   }
 
-  Future<Null> takeScreenshot(String deviceId, String outputPath) {
-    return runCheckedAsync(<String>[_xcrunPath, 'simctl', 'io', deviceId, 'screenshot', outputPath]);
+  Future<void> takeScreenshot(String deviceId, String outputPath) async {
+    try {
+      await runCheckedAsync(<String>[_xcrunPath, 'simctl', 'io', deviceId, 'screenshot', outputPath]);
+    } on ProcessException catch (exception) {
+      throwToolExit('Unable to take screenshot of $deviceId:\n$exception');
+    }
   }
 }
 
@@ -148,10 +175,10 @@ class SimControlListSection {
 
   final String name;
 
-  static const SimControlListSection devices = const SimControlListSection._('devices');
-  static const SimControlListSection devicetypes = const SimControlListSection._('devicetypes');
-  static const SimControlListSection runtimes = const SimControlListSection._('runtimes');
-  static const SimControlListSection pairs = const SimControlListSection._('pairs');
+  static const SimControlListSection devices = SimControlListSection._('devices');
+  static const SimControlListSection devicetypes = SimControlListSection._('devicetypes');
+  static const SimControlListSection runtimes = SimControlListSection._('runtimes');
+  static const SimControlListSection pairs = SimControlListSection._('pairs');
 }
 
 /// A simulated device type.
@@ -182,7 +209,7 @@ class SimDevice {
   SimDevice(this.category, this.data);
 
   final String category;
-  final Map<String, String> data;
+  final Map<String, dynamic> data;
 
   String get state => data['state'];
   String get availability => data['availability'];
@@ -193,18 +220,29 @@ class SimDevice {
 }
 
 class IOSSimulator extends Device {
-  IOSSimulator(String id, { this.name, this.category }) : super(id);
+  IOSSimulator(String id, { this.name, this.simulatorCategory }) : super(
+      id,
+      category: Category.mobile,
+      platformType: PlatformType.ios,
+      ephemeral: true,
+  );
 
   @override
   final String name;
 
-  final String category;
+  final String simulatorCategory;
 
   @override
   Future<bool> get isLocalEmulator async => true;
 
   @override
-  bool get supportsHotMode => true;
+  Future<String> get emulatorId async => iosSimulatorId;
+
+  @override
+  bool get supportsHotReload => true;
+
+  @override
+  bool get supportsHotRestart => true;
 
   Map<ApplicationPackage, _IOSSimulatorLogReader> _logReaders;
   _IOSSimulatorDevicePortForwarder _portForwarder;
@@ -247,36 +285,13 @@ class IOSSimulator extends Device {
       return false;
     }
 
-    // Step 1: Check if the device is part of a blacklisted category.
-    //         We do not support WatchOS or tvOS devices.
-
-    final RegExp blacklist = new RegExp(r'Apple (TV|Watch)', caseSensitive: false);
+    // Check if the device is part of a blacklisted category.
+    // We do not yet support WatchOS or tvOS devices.
+    final RegExp blacklist = RegExp(r'Apple (TV|Watch)', caseSensitive: false);
     if (blacklist.hasMatch(name)) {
-      _supportMessage = 'Flutter does not support Apple TV or Apple Watch. Select an iPhone 5s or above.';
+      _supportMessage = 'Flutter does not support Apple TV or Apple Watch.';
       return false;
     }
-
-    // Step 2: Check if the device must be rejected because of its version.
-    //         There is an artificial check on older simulators where arm64
-    //         targeted applications cannot be run (even though the Flutter
-    //         runner on the simulator is completely different).
-
-    // Check for unsupported iPads.
-    final Match iPadMatch = new RegExp(r'iPad (2|Retina)', caseSensitive: false).firstMatch(name);
-    if (iPadMatch != null) {
-      _supportMessage = 'Flutter does not yet support iPad 2 or iPad Retina. Select an iPad Air or above.';
-      return false;
-    }
-
-    // Check for unsupported iPhones.
-    final Match iPhoneMatch = new RegExp(r'iPhone [0-5]').firstMatch(name);
-    if (iPhoneMatch != null) {
-      if (name == 'iPhone 5s')
-        return true;
-      _supportMessage = 'Flutter does not yet support iPhone 5 or earlier. Select an iPhone 5s or above.';
-      return false;
-    }
-
     return true;
   }
 
@@ -287,73 +302,78 @@ class IOSSimulator extends Device {
     if (isSupported())
       return 'Supported';
 
-    return _supportMessage != null ? _supportMessage : 'Unknown';
+    return _supportMessage ?? 'Unknown';
   }
 
   @override
   Future<LaunchResult> startApp(
-    ApplicationPackage app, {
+    ApplicationPackage package, {
     String mainPath,
     String route,
     DebuggingOptions debuggingOptions,
     Map<String, dynamic> platformArgs,
-    bool prebuiltApplication: false,
-    bool applicationNeedsRebuild: false,
-    bool usesTerminalUi: true,
-    bool ipv6: false,
+    bool prebuiltApplication = false,
+    bool usesTerminalUi = true,
+    bool ipv6 = false,
   }) async {
     if (!prebuiltApplication) {
-      printTrace('Building ${app.name} for $id.');
+      printTrace('Building ${package.name} for $id.');
 
       try {
-        await _setupUpdatedApplicationBundle(app, debuggingOptions.buildInfo);
+        await _setupUpdatedApplicationBundle(package, debuggingOptions.buildInfo, mainPath, usesTerminalUi);
       } on ToolExit catch (e) {
         printError(e.message);
-        return new LaunchResult.failed();
+        return LaunchResult.failed();
       }
     } else {
-      if (!await installApp(app))
-        return new LaunchResult.failed();
+      if (!await installApp(package))
+        return LaunchResult.failed();
     }
 
     // Prepare launch arguments.
     final List<String> args = <String>['--enable-dart-profiling'];
 
-    if (!prebuiltApplication) {
-      args.addAll(<String>[
-        '--flutter-assets-dir=${fs.path.absolute(getAssetBuildDirectory())}',
-        '--dart-main=${fs.path.absolute(mainPath)}${debuggingOptions.buildInfo.previewDart2?".dill":""}',
-        '--packages=${fs.path.absolute('.packages')}',
-      ]);
-    }
-
     if (debuggingOptions.debuggingEnabled) {
       if (debuggingOptions.buildInfo.isDebug)
-        args.add('--enable-checked-mode');
+        args.addAll(<String>[
+          '--enable-checked-mode',
+          '--verify-entry-points',
+        ]);
       if (debuggingOptions.startPaused)
         args.add('--start-paused');
+      if (debuggingOptions.disableServiceAuthCodes)
+        args.add('--disable-service-auth-codes');
+      if (debuggingOptions.skiaDeterministicRendering)
+        args.add('--skia-deterministic-rendering');
       if (debuggingOptions.useTestFonts)
         args.add('--use-test-fonts');
-
-      final int observatoryPort = await debuggingOptions.findBestObservatoryPort();
+      final int observatoryPort = debuggingOptions.observatoryPort ?? 0;
       args.add('--observatory-port=$observatoryPort');
     }
 
     ProtocolDiscovery observatoryDiscovery;
     if (debuggingOptions.debuggingEnabled)
-      observatoryDiscovery = new ProtocolDiscovery.observatory(
-          getLogReader(app: app), ipv6: ipv6);
+      observatoryDiscovery = ProtocolDiscovery.observatory(
+          getLogReader(app: package), ipv6: ipv6);
 
     // Launch the updated application in the simulator.
     try {
-      await SimControl.instance.launch(id, app.id, args);
+      // Use the built application's Info.plist to get the bundle identifier,
+      // which should always yield the correct value and does not require
+      // parsing the xcodeproj or configuration files.
+      // See https://github.com/flutter/flutter/issues/31037 for more information.
+      final IOSApp iosApp = package;
+      final String plistPath = fs.path.join(iosApp.simulatorBundlePath, 'Info.plist');
+      final String bundleIdentifier = iosWorkflow.getPlistValueFromFile(plistPath, kCFBundleIdentifierKey);
+
+      await SimControl.instance.launch(id, bundleIdentifier, args);
     } catch (error) {
       printError('$error');
-      return new LaunchResult.failed();
+      return LaunchResult.failed();
     }
 
     if (!debuggingOptions.debuggingEnabled) {
-      return new LaunchResult.succeeded();
+      return LaunchResult.succeeded();
     }
 
     // Wait for the service protocol port here. This will complete once the
@@ -362,41 +382,33 @@ class IOSSimulator extends Device {
 
     try {
       final Uri deviceUri = await observatoryDiscovery.uri;
-      return new LaunchResult.succeeded(observatoryUri: deviceUri);
+      return LaunchResult.succeeded(observatoryUri: deviceUri);
     } catch (error) {
       printError('Error waiting for a debug connection: $error');
-      return new LaunchResult.failed();
+      return LaunchResult.failed();
     } finally {
       await observatoryDiscovery.cancel();
     }
   }
 
-  Future<bool> _applicationIsInstalledAndRunning(ApplicationPackage app) async {
-    final List<bool> criteria = await Future.wait(<Future<bool>>[
-      isAppInstalled(app),
-      exitsHappyAsync(<String>['/usr/bin/killall', 'Runner']),
-    ]);
-    return criteria.reduce((bool a, bool b) => a && b);
-  }
+  Future<void> _setupUpdatedApplicationBundle(ApplicationPackage app, BuildInfo buildInfo, String mainPath, bool usesTerminalUi) async {
+    await _sideloadUpdatedAssetsForInstalledApplicationBundle(app, buildInfo, mainPath);
 
-  Future<Null> _setupUpdatedApplicationBundle(ApplicationPackage app, BuildInfo buildInfo) async {
-    await _sideloadUpdatedAssetsForInstalledApplicationBundle(app, buildInfo);
-
-    if (!await _applicationIsInstalledAndRunning(app))
-      return _buildAndInstallApplicationBundle(app, buildInfo);
-  }
-
-  Future<Null> _buildAndInstallApplicationBundle(ApplicationPackage app, BuildInfo buildInfo) async {
     // Step 1: Build the Xcode project.
     // The build mode for the simulator is always debug.
 
-    final BuildInfo debugBuildInfo = new BuildInfo(BuildMode.debug, buildInfo.flavor,
-        previewDart2: buildInfo.previewDart2,
+    final BuildInfo debugBuildInfo = BuildInfo(BuildMode.debug, buildInfo.flavor,
+        trackWidgetCreation: buildInfo.trackWidgetCreation,
         extraFrontEndOptions: buildInfo.extraFrontEndOptions,
-        extraGenSnapshotOptions: buildInfo.extraGenSnapshotOptions,
-        preferSharedLibrary: buildInfo.preferSharedLibrary);
+        extraGenSnapshotOptions: buildInfo.extraGenSnapshotOptions);
 
-    final XcodeBuildResult buildResult = await buildXcodeProject(app: app, buildInfo: debugBuildInfo, buildForDevice: false);
+    final XcodeBuildResult buildResult = await buildXcodeProject(
+      app: app,
+      buildInfo: debugBuildInfo,
+      targetOverride: mainPath,
+      buildForDevice: false,
+      usesTerminalUi: usesTerminalUi,
+    );
     if (!buildResult.success)
       throwToolExit('Could not build the application for the simulator.');
 
@@ -411,11 +423,14 @@ class IOSSimulator extends Device {
     await SimControl.instance.install(id, fs.path.absolute(bundle.path));
   }
 
-  Future<Null> _sideloadUpdatedAssetsForInstalledApplicationBundle(ApplicationPackage app, BuildInfo buildInfo) =>
-      // When running in previewDart2 mode, we still need to run compiler to
-      // produce kernel file for the application.
-      flx.build(precompiledSnapshot: !buildInfo.previewDart2,
-          previewDart2: buildInfo.previewDart2);
+  Future<void> _sideloadUpdatedAssetsForInstalledApplicationBundle(ApplicationPackage app, BuildInfo buildInfo, String mainPath) {
+    // Run compiler to produce kernel file for the application.
+    return BundleBuilder().build(
+      mainPath: mainPath,
+      precompiledSnapshot: false,
+      trackWidgetCreation: buildInfo.trackWidgetCreation,
+    );
+  }
 
   @override
   Future<bool> stopApp(ApplicationPackage app) async {
@@ -433,36 +448,36 @@ class IOSSimulator extends Device {
   Future<TargetPlatform> get targetPlatform async => TargetPlatform.ios;
 
   @override
-  Future<String> get sdkNameAndVersion async => category;
+  Future<String> get sdkNameAndVersion async => simulatorCategory;
 
-  final RegExp _iosSdkRegExp = new RegExp(r'iOS (\d+)');
+  final RegExp _iosSdkRegExp = RegExp(r'iOS( |-)(\d+)');
 
   Future<int> get sdkMajorVersion async {
     final Match sdkMatch = _iosSdkRegExp.firstMatch(await sdkNameAndVersion);
-    return int.parse(sdkMatch.group(1) ?? 11);
+    return int.parse(sdkMatch?.group(2) ?? 11);
   }
 
   @override
-  DeviceLogReader getLogReader({ApplicationPackage app}) {
+  DeviceLogReader getLogReader({ ApplicationPackage app }) {
     assert(app is IOSApp);
     _logReaders ??= <ApplicationPackage, _IOSSimulatorLogReader>{};
-    return _logReaders.putIfAbsent(app, () => new _IOSSimulatorLogReader(this, app));
+    return _logReaders.putIfAbsent(app, () => _IOSSimulatorLogReader(this, app));
   }
 
   @override
-  DevicePortForwarder get portForwarder => _portForwarder ??= new _IOSSimulatorDevicePortForwarder(this);
+  DevicePortForwarder get portForwarder => _portForwarder ??= _IOSSimulatorDevicePortForwarder(this);
 
   @override
   void clearLogs() {
     final File logFile = fs.file(logFilePath);
     if (logFile.existsSync()) {
-      final RandomAccessFile randomFile = logFile.openSync(mode: FileMode.WRITE);
+      final RandomAccessFile randomFile = logFile.openSync(mode: FileMode.write);
       randomFile.truncateSync(0);
       randomFile.closeSync();
     }
   }
 
-  Future<Null> ensureLogsExists() async {
+  Future<void> ensureLogsExists() async {
     if (await sdkMajorVersion < 11) {
       final File logFile = fs.file(logFilePath);
       if (!logFile.existsSync())
@@ -471,15 +486,20 @@ class IOSSimulator extends Device {
   }
 
   bool get _xcodeVersionSupportsScreenshot {
-    return xcode.xcodeMajorVersion > 8 || (xcode.xcodeMajorVersion == 8 && xcode.xcodeMinorVersion >= 2);
+    return xcode.majorVersion > 8 || (xcode.majorVersion == 8 && xcode.minorVersion >= 2);
   }
 
   @override
   bool get supportsScreenshot => _xcodeVersionSupportsScreenshot;
 
   @override
-  Future<Null> takeScreenshot(File outputFile) {
+  Future<void> takeScreenshot(File outputFile) {
     return SimControl.instance.takeScreenshot(id, outputFile.path);
+  }
+
+  @override
+  bool isSupportedForProject(FlutterProject flutterProject) {
+    return flutterProject.ios.existsSync();
   }
 }
 
@@ -506,17 +526,17 @@ Future<Process> launchSystemLogTool(IOSSimulator device) async {
 }
 
 class _IOSSimulatorLogReader extends DeviceLogReader {
-  String _appName;
-
   _IOSSimulatorLogReader(this.device, IOSApp app) {
-    _linesController = new StreamController<String>.broadcast(
+    _linesController = StreamController<String>.broadcast(
       onListen: _start,
-      onCancel: _stop
+      onCancel: _stop,
     );
     _appName = app == null ? null : app.name.replaceAll('.app', '');
   }
 
   final IOSSimulator device;
+
+  String _appName;
 
   StreamController<String> _linesController;
 
@@ -530,39 +550,39 @@ class _IOSSimulatorLogReader extends DeviceLogReader {
   @override
   String get name => device.name;
 
-  Future<Null> _start() async {
+  Future<void> _start() async {
     // Device log.
     await device.ensureLogsExists();
     _deviceProcess = await launchDeviceLogTool(device);
-    _deviceProcess.stdout.transform(UTF8.decoder).transform(const LineSplitter()).listen(_onDeviceLine);
-    _deviceProcess.stderr.transform(UTF8.decoder).transform(const LineSplitter()).listen(_onDeviceLine);
+    _deviceProcess.stdout.transform<String>(utf8.decoder).transform<String>(const LineSplitter()).listen(_onDeviceLine);
+    _deviceProcess.stderr.transform<String>(utf8.decoder).transform<String>(const LineSplitter()).listen(_onDeviceLine);
 
     // Track system.log crashes.
     // ReportCrash[37965]: Saved crash report for FlutterRunner[37941]...
     _systemProcess = await launchSystemLogTool(device);
     if (_systemProcess != null) {
-      _systemProcess.stdout.transform(UTF8.decoder).transform(const LineSplitter()).listen(_onSystemLine);
-      _systemProcess.stderr.transform(UTF8.decoder).transform(const LineSplitter()).listen(_onSystemLine);
+      _systemProcess.stdout.transform<String>(utf8.decoder).transform<String>(const LineSplitter()).listen(_onSystemLine);
+      _systemProcess.stderr.transform<String>(utf8.decoder).transform<String>(const LineSplitter()).listen(_onSystemLine);
     }
 
     // We don't want to wait for the process or its callback. Best effort
     // cleanup in the callback.
-    _deviceProcess.exitCode.whenComplete(() { // ignore: unawaited_futures
+    unawaited(_deviceProcess.exitCode.whenComplete(() {
       if (_linesController.hasListener)
         _linesController.close();
-    });
+    }));
   }
 
   // Match the log prefix (in order to shorten it):
   // * Xcode 8: Sep 13 15:28:51 cbracken-macpro localhost Runner[37195]: (Flutter) Observatory listening on http://127.0.0.1:57701/
   // * Xcode 9: 2017-09-13 15:26:57.228948-0700  localhost Runner[37195]: (Flutter) Observatory listening on http://127.0.0.1:57701/
-  static final RegExp _mapRegex = new RegExp(r'\S+ +\S+ +\S+ +(\S+ +)?(\S+)\[\d+\]\)?: (\(.*?\))? *(.*)$');
+  static final RegExp _mapRegex = RegExp(r'\S+ +\S+ +\S+ +(\S+ +)?(\S+)\[\d+\]\)?: (\(.*?\))? *(.*)$');
 
   // Jan 31 19:23:28 --- last message repeated 1 time ---
-  static final RegExp _lastMessageSingleRegex = new RegExp(r'\S+ +\S+ +\S+ --- last message repeated 1 time ---$');
-  static final RegExp _lastMessageMultipleRegex = new RegExp(r'\S+ +\S+ +\S+ --- last message repeated (\d+) times ---$');
+  static final RegExp _lastMessageSingleRegex = RegExp(r'\S+ +\S+ +\S+ --- last message repeated 1 time ---$');
+  static final RegExp _lastMessageMultipleRegex = RegExp(r'\S+ +\S+ +\S+ --- last message repeated (\d+) times ---$');
 
-  static final RegExp _flutterRunnerRegex = new RegExp(r' FlutterRunner\[\d+\] ');
+  static final RegExp _flutterRunnerRegex = RegExp(r' FlutterRunner\[\d+\] ');
 
   String _filterDeviceLine(String string) {
     final Match match = _mapRegex.matchAsPrefix(string);
@@ -603,7 +623,7 @@ class _IOSSimulatorLogReader extends DeviceLogReader {
     if (_lastMessageSingleRegex.matchAsPrefix(string) != null)
       return null;
 
-    if (new RegExp(r'assertion failed: .* libxpc.dylib .* 0x7d$').matchAsPrefix(string) != null)
+    if (RegExp(r'assertion failed: .* libxpc.dylib .* 0x7d$').matchAsPrefix(string) != null)
       return null;
 
     return string;
@@ -653,8 +673,8 @@ class _IOSSimulatorLogReader extends DeviceLogReader {
 }
 
 int compareIosVersions(String v1, String v2) {
-  final List<int> v1Fragments = v1.split('.').map(int.parse).toList();
-  final List<int> v2Fragments = v2.split('.').map(int.parse).toList();
+  final List<int> v1Fragments = v1.split('.').map<int>(int.parse).toList();
+  final List<int> v2Fragments = v2.split('.').map<int>(int.parse).toList();
 
   int i = 0;
   while (i < v1Fragments.length && i < v2Fragments.length) {
@@ -676,7 +696,7 @@ int compareIosVersions(String v1, String v2) {
 ///   ✗ com.apple.CoreSimulator.SimDeviceType.iPad-2
 ///   ✗ com.apple.CoreSimulator.SimDeviceType.Apple-Watch-38mm
 final RegExp _iosDeviceTypePattern =
-    new RegExp(r'com.apple.CoreSimulator.SimDeviceType.iPhone-(\d+)(.*)');
+    RegExp(r'com.apple.CoreSimulator.SimDeviceType.iPhone-(\d+)(.*)');
 
 int compareIphoneVersions(String id1, String id2) {
   final Match m1 = _iosDeviceTypePattern.firstMatch(id1);
@@ -689,7 +709,7 @@ int compareIphoneVersions(String id1, String id2) {
     return v1.compareTo(v2);
 
   // Sorted in the least preferred first order.
-  const List<String> qualifiers = const <String>['-Plus', '', 's-Plus', 's'];
+  const List<String> qualifiers = <String>['-Plus', '', 's-Plus', 's'];
 
   final int q1 = qualifiers.indexOf(m1[2]);
   final int q2 = qualifiers.indexOf(m2[2]);
@@ -709,17 +729,17 @@ class _IOSSimulatorDevicePortForwarder extends DevicePortForwarder {
   }
 
   @override
-  Future<int> forward(int devicePort, {int hostPort}) async {
-    if ((hostPort == null) || (hostPort == 0)) {
+  Future<int> forward(int devicePort, { int hostPort }) async {
+    if (hostPort == null || hostPort == 0) {
       hostPort = devicePort;
     }
     assert(devicePort == hostPort);
-    _ports.add(new ForwardedPort(devicePort, hostPort));
+    _ports.add(ForwardedPort(devicePort, hostPort));
     return hostPort;
   }
 
   @override
-  Future<Null> unforward(ForwardedPort forwardedPort) async {
+  Future<void> unforward(ForwardedPort forwardedPort) async {
     _ports.remove(forwardedPort);
   }
 }

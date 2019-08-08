@@ -11,25 +11,25 @@ import 'semantics_tester.dart';
 
 void main() {
   testWidgets('SemanticNode.rect is clipped', (WidgetTester tester) async {
-    final SemanticsTester semantics = new SemanticsTester(tester);
+    final SemanticsTester semantics = SemanticsTester(tester);
 
-    await tester.pumpWidget(new Directionality(
+    await tester.pumpWidget(Directionality(
       textDirection: TextDirection.ltr,
-      child: new Center(
-        child: new Container(
+      child: Center(
+        child: Container(
           width: 100.0,
-          child: new Flex(
+          child: Flex(
             direction: Axis.horizontal,
             children: <Widget>[
-              new Container(
+              Container(
                 width: 75.0,
                 child: const Text('1'),
               ),
-              new Container(
+              Container(
                 width: 75.0,
                 child: const Text('2'),
               ),
-              new Container(
+              Container(
                 width: 75.0,
                 child: const Text('3'),
               ),
@@ -39,59 +39,61 @@ void main() {
       ),
     ));
 
-    expect(tester.takeException(), contains('overflowed'));
+    final dynamic exception = tester.takeException();
+    expect(exception, isInstanceOf<FlutterError>());
+    expect(exception.diagnostics.first.level, DiagnosticLevel.summary);
+    expect(exception.diagnostics.first.toString(), contains('overflowed'));
 
     expect(semantics, hasSemantics(
-      new TestSemantics.root(
+      TestSemantics.root(
         children: <TestSemantics>[
-          new TestSemantics(
-            id: 1,
+          TestSemantics(
             label: '1',
-            rect: new Rect.fromLTRB(0.0, 0.0, 75.0, 14.0),
+            rect: const Rect.fromLTRB(0.0, 0.0, 75.0, 14.0),
           ),
-          new TestSemantics(
-            id: 2,
+          TestSemantics(
             label: '2',
-            rect: new Rect.fromLTRB(0.0, 0.0, 25.0, 14.0), // clipped form original 75.0 to 25.0
+            rect: const Rect.fromLTRB(0.0, 0.0, 25.0, 14.0), // clipped form original 75.0 to 25.0
           ),
           // node with Text 3 not present.
         ],
       ),
       ignoreTransform: true,
+      ignoreId: true,
     ));
 
     semantics.dispose();
-  });
+  }, skip: isBrowser);
 
   testWidgets('SemanticsNode is not removed if out of bounds and merged into something within bounds', (WidgetTester tester) async {
-    final SemanticsTester semantics = new SemanticsTester(tester);
+    final SemanticsTester semantics = SemanticsTester(tester);
 
-    await tester.pumpWidget(new Directionality(
+    await tester.pumpWidget(Directionality(
       textDirection: TextDirection.ltr,
-      child: new Center(
-        child: new Container(
+      child: Center(
+        child: Container(
           width: 100.0,
-          child: new Flex(
+          child: Flex(
             direction: Axis.horizontal,
             children: <Widget>[
-              new Container(
+              Container(
                 width: 75.0,
                 child: const Text('1'),
               ),
-              new MergeSemantics(
-                child: new Flex(
+              MergeSemantics(
+                child: Flex(
                   direction: Axis.horizontal,
                   children: <Widget>[
-                    new Container(
+                    Container(
                       width: 75.0,
                       child: const Text('2'),
                     ),
-                    new Container(
+                    Container(
                       width: 75.0,
                       child: const Text('3'),
                     ),
-                  ]
-                )
+                  ],
+                ),
               ),
             ],
           ),
@@ -99,26 +101,28 @@ void main() {
       ),
     ));
 
-    expect(tester.takeException(), contains('overflowed'));
+    final dynamic exception = tester.takeException();
+    expect(exception, isInstanceOf<FlutterError>());
+    expect(exception.diagnostics.first.level, DiagnosticLevel.summary);
+    expect(exception.diagnostics.first.toString(), contains('overflowed'));
 
     expect(semantics, hasSemantics(
-      new TestSemantics.root(
+      TestSemantics.root(
         children: <TestSemantics>[
-          new TestSemantics(
-            id: 3,
+          TestSemantics(
             label: '1',
-            rect: new Rect.fromLTRB(0.0, 0.0, 75.0, 14.0),
+            rect: const Rect.fromLTRB(0.0, 0.0, 75.0, 14.0),
           ),
-          new TestSemantics(
-            id: 4,
+          TestSemantics(
             label: '2\n3',
-            rect: new Rect.fromLTRB(0.0, 0.0, 25.0, 14.0), // clipped form original 75.0 to 25.0
+            rect: const Rect.fromLTRB(0.0, 0.0, 25.0, 14.0), // clipped form original 75.0 to 25.0
           ),
         ],
       ),
       ignoreTransform: true,
+      ignoreId: true,
     ));
 
     semantics.dispose();
-  });
+  }, skip: isBrowser);
 }

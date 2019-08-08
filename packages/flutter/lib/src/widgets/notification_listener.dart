@@ -2,8 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'package:flutter/foundation.dart';
-
 import 'framework.dart';
 
 /// Signature for [Notification] listeners.
@@ -12,7 +10,7 @@ import 'framework.dart';
 /// notification to continue to be dispatched to further ancestors.
 ///
 /// Used by [NotificationListener.onNotification].
-typedef bool NotificationListenerCallback<T extends Notification>(T notification);
+typedef NotificationListenerCallback<T extends Notification> = bool Function(T notification);
 
 /// A notification that can bubble up the widget tree.
 ///
@@ -55,10 +53,12 @@ abstract class Notification {
   ///
   /// The notification will be delivered to any [NotificationListener] widgets
   /// with the appropriate type parameters that are ancestors of the given
-  /// [BuildContext].
+  /// [BuildContext]. If the [BuildContext] is null, the notification is not
+  /// dispatched.
   void dispatch(BuildContext target) {
-    assert(target != null); // Only call dispatch if the widget's State is still mounted.
-    target.visitAncestorElements(visitAncestor);
+    // The `target` may be null if the subtree the notification is supposed to be
+    // dispatched in is in the process of being disposed.
+    target?.visitAncestorElements(visitAncestor);
   }
 
   @override

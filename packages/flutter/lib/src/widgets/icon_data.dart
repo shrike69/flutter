@@ -23,7 +23,7 @@ class IconData {
     this.codePoint, {
     this.fontFamily,
     this.fontPackage,
-    this.matchTextDirection: false,
+    this.matchTextDirection = false,
   });
 
   /// The Unicode code point at which this icon is stored in the icon font.
@@ -65,4 +65,38 @@ class IconData {
 
   @override
   String toString() => 'IconData(U+${codePoint.toRadixString(16).toUpperCase().padLeft(5, '0')})';
+}
+
+/// [DiagnosticsProperty] that has an [IconData] as value.
+class IconDataProperty extends DiagnosticsProperty<IconData> {
+  /// Create a diagnostics property for [IconData].
+  ///
+  /// The [showName], [style], and [level] arguments must not be null.
+  IconDataProperty(
+    String name,
+    IconData value, {
+      String ifNull,
+      bool showName = true,
+      DiagnosticsTreeStyle style = DiagnosticsTreeStyle.singleLine,
+      DiagnosticLevel level = DiagnosticLevel.info,
+  }) : assert(showName != null),
+       assert(style != null),
+       assert(level != null),
+       super(name, value,
+         showName: showName,
+         ifNull: ifNull,
+         style: style,
+         level: level,
+       );
+
+  @override
+  Map<String, Object> toJsonMap(DiagnosticsSerializationDelegate delegate) {
+    final Map<String, Object> json = super.toJsonMap(delegate);
+    if (value != null) {
+      json['valueProperties'] = <String, Object>{
+        'codePoint': value.codePoint,
+      };
+    }
+    return json;
+  }
 }

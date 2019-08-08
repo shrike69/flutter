@@ -21,14 +21,14 @@ class PrimaryScrollController extends InheritedWidget {
   const PrimaryScrollController({
     Key key,
     @required this.controller,
-    @required Widget child
+    @required Widget child,
   }) : assert(controller != null),
        super(key: key, child: child);
 
   /// Creates a subtree without an associated [ScrollController].
   const PrimaryScrollController.none({
     Key key,
-    @required Widget child
+    @required Widget child,
   }) : controller = null,
        super(key: key, child: child);
 
@@ -51,11 +51,11 @@ class PrimaryScrollController extends InheritedWidget {
   }
 
   @override
-  bool updateShouldNotify(PrimaryScrollController old) => controller != old.controller;
+  bool updateShouldNotify(PrimaryScrollController oldWidget) => controller != oldWidget.controller;
 
   @override
-  void debugFillProperties(DiagnosticPropertiesBuilder description) {
-    super.debugFillProperties(description);
-    description.add(new DiagnosticsProperty<ScrollController>('controller', controller, ifNull: 'no controller', showName: false));
+  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+    super.debugFillProperties(properties);
+    properties.add(DiagnosticsProperty<ScrollController>('controller', controller, ifNull: 'no controller', showName: false));
   }
 }

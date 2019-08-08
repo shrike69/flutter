@@ -21,6 +21,25 @@ import 'icon_theme_data.dart';
 /// Typically this is introduced automatically by the [WidgetsApp] or
 /// [MaterialApp].
 ///
+/// This widget assumes that the rendered icon is squared. Non-squared icons may
+/// render incorrectly.
+///
+/// {@tool sample}
+///
+/// This example shows how to use [Icon] to create an addition icon, in the
+/// color pink, and 30 x 30 pixels in size.
+///
+/// ![A pink plus sign](https://flutter.github.io/assets-for-api-docs/assets/widgets/icon.png)
+///
+/// ```dart
+/// Icon(
+///   Icons.add,
+///   color: Colors.pink,
+///   size: 30.0,
+/// )
+/// ```
+/// {@end-tool}
+///
 /// See also:
 ///
 ///  * [IconButton], for interactive icons.
@@ -31,7 +50,8 @@ class Icon extends StatelessWidget {
   /// Creates an icon.
   ///
   /// The [size] and [color] default to the value given by the current [IconTheme].
-  const Icon(this.icon, {
+  const Icon(
+    this.icon, {
     Key key,
     this.size,
     this.color,
@@ -79,10 +99,10 @@ class Icon extends StatelessWidget {
   /// Typically, a material design color will be used, as follows:
   ///
   /// ```dart
-  ///  new Icon(
-  ///    icon: Icons.widgets,
-  ///    color: Colors.blue.shade400,
-  ///  ),
+  /// Icon(
+  ///   icon: Icons.widgets,
+  ///   color: Colors.blue.shade400,
+  /// )
   /// ```
   final Color color;
 
@@ -122,9 +142,9 @@ class Icon extends StatelessWidget {
     final double iconSize = size ?? iconTheme.size;
 
     if (icon == null) {
-      return new Semantics(
+      return Semantics(
         label: semanticLabel,
-        child: new SizedBox(width: iconSize, height: iconSize)
+        child: SizedBox(width: iconSize, height: iconSize),
       );
     }
 
@@ -133,11 +153,12 @@ class Icon extends StatelessWidget {
     if (iconOpacity != 1.0)
       iconColor = iconColor.withOpacity(iconColor.opacity * iconOpacity);
 
-    Widget iconWidget = new RichText(
+    Widget iconWidget = RichText(
+      overflow: TextOverflow.visible, // Never clip.
       textDirection: textDirection, // Since we already fetched it for the assert...
-      text: new TextSpan(
-        text: new String.fromCharCode(icon.codePoint),
-        style: new TextStyle(
+      text: TextSpan(
+        text: String.fromCharCode(icon.codePoint),
+        style: TextStyle(
           inherit: false,
           color: iconColor,
           fontSize: iconSize,
@@ -150,8 +171,8 @@ class Icon extends StatelessWidget {
     if (icon.matchTextDirection) {
       switch (textDirection) {
         case TextDirection.rtl:
-          iconWidget = new Transform(
-            transform: new Matrix4.identity()..scale(-1.0),
+          iconWidget = Transform(
+            transform: Matrix4.identity()..scale(-1.0, 1.0, 1.0),
             alignment: Alignment.center,
             transformHitTests: false,
             child: iconWidget,
@@ -162,13 +183,13 @@ class Icon extends StatelessWidget {
       }
     }
 
-    return new Semantics(
+    return Semantics(
       label: semanticLabel,
-      child: new ExcludeSemantics(
-        child: new SizedBox(
+      child: ExcludeSemantics(
+        child: SizedBox(
           width: iconSize,
           height: iconSize,
-          child: new Center(
+          child: Center(
             child: iconWidget,
           ),
         ),
@@ -177,10 +198,10 @@ class Icon extends StatelessWidget {
   }
 
   @override
-  void debugFillProperties(DiagnosticPropertiesBuilder description) {
-    super.debugFillProperties(description);
-    description.add(new DiagnosticsProperty<IconData>('icon', icon, ifNull: '<empty>', showName: false));
-    description.add(new DoubleProperty('size', size, defaultValue: null));
-    description.add(new DiagnosticsProperty<Color>('color', color, defaultValue: null));
+  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+    super.debugFillProperties(properties);
+    properties.add(IconDataProperty('icon', icon, ifNull: '<empty>', showName: false));
+    properties.add(DoubleProperty('size', size, defaultValue: null));
+    properties.add(ColorProperty('color', color, defaultValue: null));
   }
 }

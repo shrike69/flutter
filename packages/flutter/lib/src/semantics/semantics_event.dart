@@ -2,7 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
 /// An event sent by the application to notify interested listeners that
@@ -53,75 +52,6 @@ abstract class SemanticsEvent {
   }
 }
 
-/// Notifies that a scroll action has been completed.
-///
-/// This event translates into a `AccessibilityEvent.TYPE_VIEW_SCROLLED` on
-/// Android and a `UIAccessibilityPageScrolledNotification` on iOS. It is
-/// processed by the accessibility systems of the operating system to provide
-/// additional feedback to the user about the state of a scrollable view (e.g.
-/// on Android, a ping sound is played to indicate that a scroll action was
-/// successful).
-class ScrollCompletedSemanticsEvent extends SemanticsEvent {
-  /// Creates a [ScrollCompletedSemanticsEvent].
-  ///
-  /// This event should be sent after a scroll action is completed. It is
-  /// interpreted by assistive technologies to provide additional feedback about
-  /// the just completed scroll action to the user.
-  ///
-  /// The parameters [axis], [pixels], [minScrollExtent], and [maxScrollExtent] are
-  /// required and may not be null.
-  ScrollCompletedSemanticsEvent({
-    @required this.axis,
-    @required this.pixels,
-    @required this.maxScrollExtent,
-    @required this.minScrollExtent
-  }) : assert(axis != null),
-       assert(pixels != null),
-       assert(maxScrollExtent != null),
-       assert(minScrollExtent != null),
-       super('scroll');
-
-  /// The axis in which the scroll view was scrolled.
-  ///
-  /// See also [ScrollPosition.axis].
-  final Axis axis;
-
-  /// The current scroll position, in logical pixels.
-  ///
-  /// See also [ScrollPosition.pixels].
-  final double pixels;
-
-  /// The minimum in-range value for [pixels].
-  ///
-  /// See also [ScrollPosition.minScrollExtent].
-  final double minScrollExtent;
-
-  /// The maximum in-range value for [pixels].
-  ///
-  /// See also [ScrollPosition.maxScrollExtent].
-  final double maxScrollExtent;
-
-  @override
-  Map<String, dynamic> getDataMap() {
-    final Map<String, dynamic> map = <String, dynamic>{
-      'pixels': pixels.clamp(minScrollExtent, maxScrollExtent),
-      'minScrollExtent': minScrollExtent,
-      'maxScrollExtent': maxScrollExtent,
-    };
-
-    switch (axis) {
-      case Axis.horizontal:
-        map['axis'] = 'h';
-        break;
-      case Axis.vertical:
-        map['axis'] = 'v';
-        break;
-    }
-
-    return map;
-  }
-}
-
 /// An event for a semantic announcement.
 ///
 /// This should be used for announcement that are not seamlessly announced by
@@ -135,10 +65,10 @@ class ScrollCompletedSemanticsEvent extends SemanticsEvent {
 class AnnounceSemanticsEvent extends SemanticsEvent {
 
   /// Constructs an event that triggers an announcement by the platform.
-  const AnnounceSemanticsEvent(this.message, this.textDirection) :
-    assert(message != null),
-    assert(textDirection != null),
-    super('announce');
+  const AnnounceSemanticsEvent(this.message, this.textDirection)
+    : assert(message != null),
+      assert(textDirection != null),
+      super('announce');
 
   /// The message to announce.
   ///
@@ -157,4 +87,67 @@ class AnnounceSemanticsEvent extends SemanticsEvent {
       'textDirection': textDirection.index,
     };
   }
+}
+
+/// An event for a semantic announcement of a tooltip.
+///
+/// This is only used by Android to announce tooltip values.
+class TooltipSemanticsEvent extends SemanticsEvent {
+
+  /// Constructs an event that triggers a tooltip announcement by the platform.
+  const TooltipSemanticsEvent(this.message) : super('tooltip');
+
+  /// The text content of the tooltip.
+  final String message;
+
+  @override
+  Map<String, dynamic> getDataMap() {
+    return <String, dynamic>{
+      'message': message,
+    };
+  }
+}
+
+/// An event which triggers long press semantic feedback.
+///
+/// Currently only honored on Android. Triggers a long-press specific sound
+/// when TalkBack is enabled.
+class LongPressSemanticsEvent extends SemanticsEvent {
+
+  /// Constructs an event that triggers a long-press semantic feedback by the platform.
+  const LongPressSemanticsEvent() : super('longPress');
+
+  @override
+  Map<String, dynamic> getDataMap() => const <String, dynamic>{};
+}
+
+/// An event which triggers tap semantic feedback.
+///
+/// Currently only honored on Android. Triggers a tap specific sound when
+/// TalkBack is enabled.
+class TapSemanticEvent extends SemanticsEvent {
+
+  /// Constructs an event that triggers a long-press semantic feedback by the platform.
+  const TapSemanticEvent() : super('tap');
+
+  @override
+  Map<String, dynamic> getDataMap() => const <String, dynamic>{};
+}
+
+/// An event which triggers a polite announcement of a live region.
+///
+/// This requires that the semantics node has already been marked as a live
+/// region. On Android, TalkBack will make a verbal announcement, as long as
+/// the label of the semantics node has changed since the last live region
+/// update. iOS does not currently support this event.
+///
+/// See also:
+///
+///  * [SemanticsFlag.liveRegion], for a description of live regions.
+class UpdateLiveRegionEvent extends SemanticsEvent {
+  /// Creates a new [UpdateLiveRegionEvent].
+  const UpdateLiveRegionEvent() : super('updateLiveRegion');
+
+  @override
+  Map<String, dynamic> getDataMap() => const <String, dynamic>{};
 }

@@ -6,23 +6,22 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('TrackingScrollController saves offset',
-      (WidgetTester tester) async {
-    final TrackingScrollController controller = new TrackingScrollController();
+  testWidgets('TrackingScrollController saves offset', (WidgetTester tester) async {
+    final TrackingScrollController controller = TrackingScrollController();
     const double listItemHeight = 100.0;
 
     await tester.pumpWidget(
-      new Directionality(
+      Directionality(
         textDirection: TextDirection.ltr,
-        child: new PageView.builder(
+        child: PageView.builder(
           itemBuilder: (BuildContext context, int index) {
-            return new ListView(
+            return ListView(
               controller: controller,
-              children: new List<Widget>.generate(
+              children: List<Widget>.generate(
                 10,
-                (int i) => new Container(
+                (int i) => Container(
                   height: listItemHeight,
-                  child: new Text('Page$index-Item$i'),
+                  child: Text('Page$index-Item$i'),
                 ),
               ).toList(),
             );
@@ -37,10 +36,10 @@ void main() {
     expect(find.text('Page2-Item1'), findsNothing);
 
     controller.jumpTo(listItemHeight + 10);
-    await (tester.pumpAndSettle());
+    await tester.pumpAndSettle();
 
     await tester.fling(find.text('Page0-Item1'), const Offset(-100.0, 0.0), 10000.0);
-    await (tester.pumpAndSettle());
+    await tester.pumpAndSettle();
 
     expect(find.text('Page0-Item1'), findsNothing);
     expect(find.text('Page1-Item1'), findsOneWidget);
@@ -48,7 +47,7 @@ void main() {
     expect(find.text('Page2-Item1'), findsNothing);
 
     await tester.fling(find.text('Page1-Item1'), const Offset(-100.0, 0.0), 10000.0);
-    await (tester.pumpAndSettle());
+    await tester.pumpAndSettle();
 
     expect(find.text('Page0-Item1'), findsNothing);
     expect(find.text('Page1-Item1'), findsNothing);
